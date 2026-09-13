@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consultar mi denuncia | Protección Estudiantil</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+  :root{
+    --rojo: #B91C2C;
+    --rojo-oscuro: #8F1522;
+    --celeste: #0E8FC4;
+    --celeste-oscuro: #0B6E99;
+    --tinta: #10161F;
+    --gris-800: #2B3440;
+    --gris: #667085;
+    --gris-claro: #98A2B3;
+    --fondo: #F4F6F9;
+    --borde: #E3E7EE;
+    --superficie: #FFFFFF;
+    --exito: #157F4A;
+    --exito-fondo: #E8F6EE;
+    --ambar: #B7791F;
+    --ambar-fondo: #FDF3E3;
+    --radio-lg: 16px;
+    --radio-md: 10px;
+    --sombra: 0 1px 2px rgba(16,24,40,.04), 0 10px 28px -12px rgba(16,24,40,.12);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Inter', system-ui, sans-serif;
+    background: var(--fondo);
+    color: var(--tinta);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{ font-family:'Source Serif 4', Georgia, serif; }
+  .franja{ height:6px; display:flex; }
+  .franja span{flex:1;}
+  .franja .r{background:var(--rojo);}
+  .franja .c{background:var(--celeste);}
+  .franja .b{background:var(--superficie); border-top:1px solid var(--borde); border-bottom:1px solid var(--borde);}
+
+  header{
+    background: linear-gradient(160deg, var(--rojo-oscuro) 0%, var(--rojo) 42%, var(--celeste-oscuro) 100%);
+    color:var(--superficie);
+    padding: 26px 20px;
+    text-align:center;
+  }
+  header h1{ margin:0; font-size:1.3rem; }
+  header p{ margin:6px auto 0; font-size:.85rem; opacity:.9; max-width:480px; }
+
+  main{ max-width:520px; margin:0 auto; padding:32px 20px 60px; }
+
+  .tarjeta{
+    background:var(--superficie); border:1px solid var(--borde); border-radius:var(--radio-lg);
+    padding:26px 24px; box-shadow: var(--sombra);
+  }
+  label{ display:block; font-size:.85rem; font-weight:600; margin-bottom:7px; color:var(--gris-800); }
+  input[type=text]{
+    width:100%;
+    padding:12px 14px;
+    border:1.5px solid var(--borde);
+    border-radius:var(--radio-md);
+    font-size:1rem;
+    font-family:inherit;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    background:#FBFCFD;
+    color:var(--tinta);
+    margin-bottom:14px;
+  }
+  input:focus{
+    outline:none;
+    border-color:var(--celeste);
+    background:var(--superficie);
+    box-shadow: 0 0 0 4px rgba(14,143,196,.12);
+  }
+  button{
+    font-family:inherit;
+    font-size:.9rem;
+    font-weight:600;
+    border:none;
+    border-radius:var(--radio-md);
+    padding:12px 20px;
+    cursor:pointer;
+    width:100%;
+    background:var(--celeste);
+    color:#fff;
+  }
+  button:hover{ opacity:.9; }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .mensaje{ font-size:.85rem; margin-top:14px; font-weight:600; text-align:center; min-height:18px; }
+  .mensaje.error{ color:var(--rojo); }
+
+  .resultado{ margin-top:22px; display:none; }
+  .resultado .fila{ display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--borde); font-size:.9rem; }
+  .resultado .fila:last-child{ border-bottom:none; }
+  .resultado .fila .rotulo{ color:var(--gris); }
+  .resultado .fila .valor{ font-weight:600; text-align:right; max-width:60%; }
+
+  .pastilla-estado{ font-size:.78rem; font-weight:700; padding:4px 12px; border-radius:999px; }
+  .pastilla-estado.Nueva{ background:var(--ambar-fondo); color:var(--ambar); }
+  .pastilla-estado.En-revisión{ background:#EAF1FE; color:var(--celeste-oscuro); }
+  .pastilla-estado.Resuelta{ background:var(--exito-fondo); color:var(--exito); }
+
+  footer{ text-align:center; font-size:.78rem; color:var(--gris); padding:20px; }
+  footer a{ color:var(--gris); }
+</style>
+</head>
+<body>
+
+<div class="franja"><span class="r"></span><span class="c"></span><span class="b"></span></div>
+
+<header>
+  <h1>Consultar el estado de mi denuncia</h1>
+  <p>Ingresa el código anónimo que recibiste al enviar tu denuncia (ej. DEN-XXXXXXXX).</p>
+</header>
+
+<main>
+  <div class="tarjeta">
+    <label for="codigoConsulta">Código anónimo</label>
+    <input type="text" id="codigoConsulta" placeholder="DEN-XXXXXXXX" maxlength="12">
+    <button id="btnConsultar">Consultar</button>
+    <p class="mensaje" id="mensajeConsulta"></p>
+
+    <div class="resultado" id="resultado">
+      <div class="fila"><span class="rotulo">Código</span><span class="valor" id="rCodigo"></span></div>
+      <div class="fila"><span class="rotulo">Tipo</span><span class="valor" id="rTipo"></span></div>
+      <div class="fila"><span class="rotulo">Fecha de envío</span><span class="valor" id="rFecha"></span></div>
+      <div class="fila"><span class="rotulo">Estado</span><span class="valor" id="rEstado"></span></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <a href="index.html">← Volver al formulario de denuncias</a>
+</footer>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyD-CYI-zIkzv29rxmX31kTDOTveYk_Rx9g",
+    authDomain: "denuncias-satelite-norte.firebaseapp.com",
+    databaseURL: "https://denuncias-satelite-norte-default-rtdb.firebaseio.com",
+    projectId: "denuncias-satelite-norte",
+    storageBucket: "denuncias-satelite-norte.firebasestorage.app",
+    messagingSenderId: "108524743451",
+    appId: "1:108524743451:web:6910a69bcf94fea29681be"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  const codigoConsulta = document.getElementById('codigoConsulta');
+  const btnConsultar = document.getElementById('btnConsultar');
+  const mensajeConsulta = document.getElementById('mensajeConsulta');
+  const resultado = document.getElementById('resultado');
+
+  btnConsultar.addEventListener('click', async () => {
+    const codigo = codigoConsulta.value.trim().toUpperCase();
+    mensajeConsulta.textContent = '';
+    mensajeConsulta.classList.remove('error');
+    resultado.style.display = 'none';
+
+    if(!codigo){
+      mensajeConsulta.textContent = 'Escribe tu código anónimo.';
+      mensajeConsulta.classList.add('error');
+      return;
+    }
+
+    btnConsultar.disabled = true;
+    mensajeConsulta.textContent = 'Buscando...';
+
+    try {
+      const snap = await db.ref('denuncias/' + codigo).once('value');
+      if(!snap.exists()){
+        mensajeConsulta.textContent = 'No se encontró ninguna denuncia con ese código.';
+        mensajeConsulta.classList.add('error');
+        btnConsultar.disabled = false;
+        return;
+      }
+      const d = snap.val();
+      document.getElementById('rCodigo').textContent = d.codigo_anonimo || codigo;
+      document.getElementById('rTipo').textContent = d.tipo || '—';
+      document.getElementById('rFecha').textContent = d.fecha ? new Date(d.fecha).toLocaleString('es-CO') : '—';
+      const estado = d.estado || 'Nueva';
+      document.getElementById('rEstado').innerHTML = '<span class="pastilla-estado ' + estado.replace(' ', '-') + '">' + estado + '</span>';
+      resultado.style.display = 'block';
+      mensajeConsulta.textContent = '';
+    } catch (e) {
+      mensajeConsulta.textContent = 'No se pudo consultar: ' + e.message;
+      mensajeConsulta.classList.add('error');
+    } finally {
+      btnConsultar.disabled = false;
+    }
+  });
+
+  codigoConsulta.addEventListener('keydown', (e) => { if(e.key === 'Enter') btnConsultar.click(); });
+</script>
+
+</body>
+</html>
