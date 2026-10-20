@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protección Estudiantil | U.E. Satélite Norte</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (base de datos; este borrador usa denuncias de texto) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- EmailJS (código de verificación + notificación de nueva denuncia) -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<!-- reCAPTCHA (evita bots) -->
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
+<style>
+  :root{
+    --rojo: #B91C2C;
+    --rojo-oscuro: #8F1522;
+    --celeste: #0E8FC4;
+    --celeste-oscuro: #0B6E99;
+    --tinta: #10161F;
+    --gris-800: #2B3440;
+    --gris: #667085;
+    --gris-claro: #98A2B3;
+    --fondo: #F4F6F9;
+    --borde: #E3E7EE;
+    --superficie: #FFFFFF;
+    --exito: #157F4A;
+    --exito-fondo: #E8F6EE;
+    --radio-lg: 16px;
+    --radio-md: 10px;
+    --sombra: 0 1px 2px rgba(16,24,40,.04), 0 10px 28px -12px rgba(16,24,40,.12);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Inter', system-ui, sans-serif;
+    background: var(--fondo);
+    color: var(--tinta);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{ font-family:'Source Serif 4', Georgia, serif; }
+
+  /* ===== FRANJA TRICOLOR ===== */
+  .franja{ height:6px; display:flex; }
+  .franja span{flex:1;}
+  .franja .r{background:var(--rojo);}
+  .franja .c{background:var(--celeste);}
+  .franja .b{background:var(--superficie); border-top:1px solid var(--borde); border-bottom:1px solid var(--borde);}
+
+  /* ===== ENCABEZADO ===== */
+  header{
+    background: linear-gradient(160deg, var(--rojo-oscuro) 0%, var(--rojo) 42%, var(--celeste-oscuro) 100%);
+    color:var(--superficie);
+    padding: 34px 20px 40px;
+  }
+  .header-inner{
+    max-width: 900px;
+    margin:0 auto;
+    display:flex;
+    align-items:center;
+    gap:20px;
+  }
+  .escudo-marco{
+    flex-shrink:0;
+    width:82px;
+    height:82px;
+    border-radius:50%;
+    background:var(--superficie);
+    padding:5px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.25);
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .escudo-marco img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    object-position: center 30%;
+    transform: scale(1.5);
+  }
+  .titulo-institucion{ line-height:1.25; }
+  .titulo-institucion .eyebrow{
+    font-size:.68rem;
+    letter-spacing:1.6px;
+    text-transform:uppercase;
+    opacity:.78;
+    font-weight:600;
+  }
+  .titulo-institucion h1{
+    margin:2px 0 0;
+    font-size: 1.28rem;
+    font-weight:700;
+  }
+  .titulo-institucion p{ margin:3px 0 0; font-size: .82rem; opacity:.85; }
+
+  .plataforma{ margin-top:26px; text-align:center; }
+  .plataforma h2{ margin:0; font-size:1.9rem; font-weight:700; letter-spacing:-.2px; }
+  .plataforma p{
+    margin:8px auto 0;
+    font-size:.94rem;
+    max-width:520px;
+    opacity:.92;
+    line-height:1.5;
+  }
+
+  /* ===== BARRA DE PROGRESO ===== */
+  .stepper{
+    max-width:900px;
+    margin: -22px auto 0;
+    padding: 0 20px;
+    position:relative;
+    z-index:2;
+  }
+  .stepper-tarjeta{
+    background:var(--superficie);
+    border:1px solid var(--borde);
+    border-radius:999px;
+    box-shadow: var(--sombra);
+    padding:14px 22px;
+    display:flex;
+    justify-content:space-between;
+    gap:6px;
+    overflow-x:auto;
+  }
+  .paso{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-shrink:0;
+    font-size:.76rem;
+    font-weight:600;
+    color:var(--gris-claro);
+    white-space:nowrap;
+  }
+  .paso .bola{
+    width:22px; height:22px;
+    border-radius:50%;
+    border:2px solid var(--borde);
+    display:flex; align-items:center; justify-content:center;
+    font-size:.68rem;
+    color:var(--gris-claro);
+    flex-shrink:0;
+  }
+  .paso.activo{ color:var(--tinta); }
+  .paso.activo .bola{ border-color:var(--rojo); color:var(--rojo); }
+  .paso.completo .bola{ border-color:var(--exito); background:var(--exito); color:#fff; }
+  .paso.completo{ color:var(--exito); }
+
+  /* ===== CONTENEDOR ===== */
+  main{ max-width: 900px; margin: 28px auto 60px; padding: 0 20px; }
+  .tarjeta{
+    background:var(--superficie);
+    border:1px solid var(--borde);
+    border-radius:var(--radio-lg);
+    padding:30px 28px;
+    margin-bottom:20px;
+    box-shadow: var(--sombra);
+    transition: opacity .2s ease;
+  }
+  .tarjeta.bloqueada{ opacity:.45; pointer-events:none; user-select:none; }
+
+  .encabezado-tarjeta{
+    display:flex;
+    align-items:flex-start;
+    gap:14px;
+    margin-bottom:18px;
+  }
+  .num{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:34px;height:34px;
+    background: var(--celeste);
+    color:var(--superficie);
+    border-radius:10px;
+    font-size:.92rem;
+    font-weight:700;
+    flex-shrink:0;
+    font-family:'Source Serif 4', serif;
+  }
+  .tarjeta h3{ margin:0; font-size:1.18rem; color:var(--tinta); font-weight:700; }
+  .subtexto{ color:var(--gris); font-size:.87rem; margin:2px 0 0; line-height:1.5; }
+  .aviso-bloqueo{
+    font-size:.8rem;
+    color:var(--rojo);
+    font-weight:600;
+    margin:-6px 0 16px 48px;
+    display:none;
+  }
+  .tarjeta.bloqueada .aviso-bloqueo{ display:block; }
+
+  label{ display:block; font-size:.85rem; font-weight:600; margin-bottom:7px; color:var(--gris-800); }
+  input[type=email], input[type=text], input[type=file], textarea, select{
+    width:100%;
+    padding:12px 14px;
+    border:1.5px solid var(--borde);
+    border-radius:var(--radio-md);
+    font-size:.94rem;
+    font-family:inherit;
+    background:#FBFCFD;
+    color:var(--tinta);
+  }
+  input:focus, textarea:focus, select:focus{
+    outline:none;
+    border-color:var(--celeste);
+    background:var(--superficie);
+    box-shadow: 0 0 0 4px rgba(14,143,196,.12);
+  }
+  textarea{ resize:vertical; min-height:120px; }
+
+  .fila{ display:flex; gap:14px; flex-wrap:wrap; }
+
+  .info-tipo-detalle{
+    margin-top:16px; padding:14px 16px; background:#EAF1FE; border:1px solid #BFDBFE;
+    border-radius:var(--radio-md); font-size:.86rem; line-height:1.5; color:var(--gris-800);
+  }
+  .info-tipo-detalle strong{ color:var(--celeste-oscuro); }
+
+  .seccion-faq{
+    max-width: 880px;
+    margin: 10px auto 0;
+    padding: 0 20px;
+  }
+  .seccion-faq h2{ font-size: 1.15rem; margin: 0 0 14px; }
+  .seccion-faq details{
+    background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
+    margin-bottom: 10px; padding: 14px 16px; box-shadow: var(--sombra);
+  }
+  .seccion-faq summary{
+    font-weight: 600; font-size: .92rem; cursor: pointer; color: var(--tinta);
+    list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  }
+  .seccion-faq summary::-webkit-details-marker{ display:none; }
+  .seccion-faq summary::after{ content: '+'; font-size: 1.2rem; color: var(--celeste); flex-shrink:0; }
+  .seccion-faq details[open] summary::after{ content: '−'; }
+  .seccion-faq p{ font-size: .87rem; color: var(--gris-800); line-height: 1.55; margin: 10px 0 0; }
+  .fila > div{ flex:1; min-width:220px; }
+  .fila-correo{ display:flex; gap:10px; flex-wrap:wrap; }
+  .fila-correo input{ flex:1; min-width:200px; }
+
+  button{
+    font-family:inherit;
+    font-size:.88rem;
+    font-weight:600;
+    border:none;
+    border-radius:var(--radio-md);
+    padding:12px 20px;
+    cursor:pointer;
+    transition: opacity .15s ease, transform .1s ease;
+  }
+  button:hover{ opacity:.9; }
+  button:active{ transform: translateY(1px); }
+  button:disabled{ opacity:.4; cursor:not-allowed; }
+
+  .btn-celeste{ background:var(--celeste); color:var(--superficie); }
+  .btn-rojo{ background:var(--rojo); color:var(--superficie); }
+  .btn-fantasma{ background:transparent; color:var(--gris); border:1.5px solid var(--borde); }
+
+  #btnEnviarDenuncia{
+    padding:16px 32px;
+    font-size:1.02rem;
+    font-weight:700;
+    border-radius:var(--radio-md);
+    box-shadow: 0 10px 24px -8px rgba(185,28,44,.55);
+  }
+  #btnEnviarDenuncia:not(:disabled):hover{
+    transform: translateY(-1px);
+    box-shadow: 0 14px 28px -6px rgba(185,28,44,.65);
+  }
+
+  .bloque-verificacion{
+    margin-top:16px;
+    padding:16px;
+    border-radius:var(--radio-md);
+    background:#EFF8FC;
+    border:1px dashed var(--celeste);
+    display:none;
+  }
+  .bloque-verificacion.activo{display:block;}
+  .fila-codigo{ display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .fila-codigo input{ flex:1; min-width:140px; letter-spacing:4px; text-align:center; font-weight:700; }
+
+  .estado{ font-size:.84rem; margin-top:10px; font-weight:600; }
+  .estado.ok{color:var(--exito);}
+  .estado.error{color:var(--rojo);}
+  .estado.pendiente{color:var(--gris);}
+
+  .insignia-verificado{
+    display:none;
+    align-items:center;
+    gap:6px;
+    font-size:.78rem;
+    font-weight:700;
+    color:var(--exito);
+    background:var(--exito-fondo);
+    border:1px solid #BEE7CF;
+    padding:6px 12px;
+    border-radius:999px;
+    margin-top:12px;
+  }
+  .insignia-verificado.mostrar{ display:inline-flex; }
+
+  /* ===== TIPOS DE DENUNCIA ===== */
+  .grid-tipos{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px,1fr));
+    gap:12px;
+    align-items:start; /* al desplegar Discriminación, las demás tarjetas NO se estiran */
+  }
+  .opcion-tipo{ position:relative; }
+  .opcion-tipo input{
+    position:absolute; opacity:0; inset:0; cursor:pointer; margin:0; width:100%; height:100%;
+  }
+  .opcion-tipo .caja{
+    border:1.5px solid var(--borde);
+    border-radius:var(--radio-md);
+    padding:18px 14px;
+    text-align:center;
+    background:#FBFCFD;
+    transition: border-color .15s, background .15s, color .15s, transform .12s, box-shadow .15s;
+    min-height:138px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+  }
+  .opcion-tipo .caja .icono{ font-size:1.55rem; line-height:1; }
+  .opcion-tipo .caja .etiqueta{ font-size:.92rem; font-weight:700; color:var(--tinta); }
+  .opcion-tipo .caja .descripcion{ font-size:.72rem; color:var(--gris); line-height:1.35; }
+  .opcion-tipo input:checked + .caja{
+    border-color:var(--rojo);
+    background:#FDF1F2;
+    transform:translateY(-2px);
+    box-shadow: 0 6px 16px -6px rgba(185,28,44,.35);
+  }
+  .opcion-tipo input:checked + .caja .etiqueta{ color:var(--rojo); }
+  .opcion-tipo input:checked + .caja .descripcion{ color:var(--rojo-oscuro); opacity:.85; }
+  .opcion-tipo input:focus-visible + .caja{ outline:2px solid var(--celeste); outline-offset:2px; }
+
+  .categoria-expandible{ display:flex; flex-direction:column; }
+  .categoria-expandible .caja{ cursor:pointer; }
+  .categoria-expandible .flecha-desglose{
+    position:absolute; top:14px; right:14px; font-size:.85rem; color:var(--gris-claro);
+    transition: transform .2s ease;
+  }
+  .categoria-expandible.abierta .flecha-desglose{ transform: rotate(180deg); }
+  .categoria-expandible.tiene-seleccion .caja{
+    border-color: var(--rojo); background: linear-gradient(180deg, #FDF1F2 0%, #FFFFFF 100%);
+  }
+  .categoria-expandible.tiene-seleccion .caja .etiqueta{ color:var(--rojo); }
+  .categoria-expandible.tiene-seleccion .caja .descripcion{ color:var(--rojo-oscuro); opacity:.85; }
+
+  .subtipos-lista{
+    display:none; margin-top:2px; padding:6px 4px 2px; border-top:1px dashed var(--borde);
+  }
+  .subtipos-lista.abierta{ display:block; }
+  .subtipo-fila{
+    display:flex; align-items:center; gap:9px; padding:8px 6px; border-radius:8px;
+    font-size:.83rem; color:var(--gris-800); cursor:pointer;
+  }
+  .subtipo-fila:hover{ background:var(--fondo); }
+  .subtipo-fila input{ accent-color: var(--rojo); width:15px; height:15px; margin:0; flex-shrink:0; }
+  .subtipo-fila:has(input:checked){ background:#FDF1F2; color:var(--rojo-oscuro); font-weight:600; }
+
+  /* ===== EVIDENCIA ===== */
+  .zona-evidencia{
+    border:1.5px dashed var(--borde);
+    border-radius:var(--radio-md);
+    padding:26px;
+    text-align:center;
+    background:#FBFCFD;
+  }
+  .zona-evidencia p{ margin:6px 0 14px; color:var(--gris); font-size:.85rem; }
+  .zona-evidencia input[type=file]{ background:transparent; border:none; padding:0; }
+
+  #vista-previa{
+    display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; justify-content:flex-start;
+  }
+  .miniatura{
+    width:98px; height:98px; border-radius:10px; overflow:hidden;
+    border:1px solid var(--borde); position:relative; background:#000;
+  }
+  .miniatura img, .miniatura video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .miniatura .nombre{
+    position:absolute; bottom:0; left:0; right:0;
+    background:rgba(16,22,31,.68); color:#fff; font-size:.6rem;
+    padding:3px 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .miniatura .quitar{
+    position:absolute; top:4px; right:4px; width:20px; height:20px; border-radius:50%;
+    background:rgba(16,22,31,.6); color:#fff; border:none; font-size:.72rem; line-height:1;
+    cursor:pointer; padding:0;
+  }
+  .miniatura .marca-video{
+    position:absolute; top:4px; left:4px; background:rgba(16,22,31,.7); color:#fff; font-size:.62rem;
+    padding:2px 6px; border-radius:6px; font-weight:700;
+  }
+  .contador-evidencia{ font-size:.78rem; color:var(--gris); margin-top:12px; }
+
+  /* ===== ENVIO ===== */
+  .barra-envio{ display:flex; justify-content:flex-end; gap:12px; align-items:center; flex-wrap:wrap; }
+  .aviso-privacidad{
+    font-size:.8rem; color:var(--gris); text-align:center; margin: 4px 0 22px;
+    padding:14px 18px; background:#FBFCFD; border:1px solid var(--borde); border-radius:var(--radio-md);
+  }
+  .aviso-emergencia{
+    display:flex; align-items:flex-start; gap:10px;
+    background:#FDF3E3; border:1px solid #F3D9A3; border-radius:var(--radio-md);
+    padding:14px 16px; margin-bottom:16px; font-size:.85rem; line-height:1.5; color:var(--gris-800);
+  }
+  .aviso-emergencia .icono-emergencia{ font-size:1.2rem; flex-shrink:0; }
+  .aviso-emergencia strong{ color:var(--rojo-oscuro); }
+  .estado-envio{ font-size:.86rem; font-weight:600; text-align:right; width:100%; margin-top:-4px; }
+
+  .banner-consulta{
+    max-width: 880px;
+    margin: 22px auto 0;
+    padding: 0 20px;
+  }
+  .banner-consulta a{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    background: linear-gradient(135deg, var(--celeste) 0%, var(--celeste-oscuro) 100%);
+    color: #fff;
+    text-decoration: none;
+    border-radius: var(--radio-lg);
+    padding: 18px 24px;
+    box-shadow: 0 10px 28px -10px rgba(14,143,196,.55);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .banner-consulta a:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px -8px rgba(14,143,196,.65);
+  }
+  .banner-consulta .icono-banner{ font-size: 1.7rem; flex-shrink: 0; }
+  .banner-consulta .texto-banner{ flex: 1; }
+  .banner-consulta .texto-banner .titulo-banner{ font-weight: 700; font-size: 1.05rem; }
+  .banner-consulta .texto-banner .subtitulo-banner{ font-size: .82rem; opacity: .92; margin-top: 2px; }
+  .banner-consulta .flecha-banner{ font-size: 1.3rem; flex-shrink: 0; }
+
+  .caja-codigo{
+    display:none; text-align:center; margin:0 0 18px; padding:24px 20px;
+    background:linear-gradient(180deg,#F1FAF5 0%,#FFFFFF 100%); border:2px solid #BEE7CF; border-radius:var(--radio-lg);
+    box-shadow:var(--sombra);
+  }
+  .caja-codigo.mostrar{ display:block; }
+  .caja-codigo .ok-titulo{ font-family:'Source Serif 4',serif; font-weight:700; font-size:1.15rem; color:var(--exito); margin:0 0 4px; }
+  .caja-codigo .ok-sub{ font-size:.85rem; color:var(--gris-800); margin:0 0 14px; }
+  .caja-codigo .codigo-grande{
+    display:inline-block; font-family:'Inter',monospace; font-weight:700; font-size:1.7rem; letter-spacing:3px;
+    padding:12px 22px; background:#fff; border:2px dashed var(--exito); border-radius:var(--radio-md); color:var(--tinta);
+    user-select:all; word-break:break-all;
+  }
+  .caja-codigo .acciones-codigo{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
+  .caja-codigo .acciones-codigo a, .caja-codigo .acciones-codigo button{ text-decoration:none; }
+  .caja-codigo .advertencia{ margin:14px 0 0; font-size:.8rem; color:var(--rojo-oscuro); font-weight:600; }
+  footer{
+    text-align:center; padding:26px 20px 40px; color:var(--gris); font-size:.78rem;
+    border-top:1px solid var(--borde); margin-top:10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="franja"><span class="r"></span><span class="c"></span><span class="b"></span></div>
+
+<header>
+  <div class="header-inner">
+    <div class="escudo-marco">
+      <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAAAAAAD/5AAwWElBT01JX0NVU1RPTUlaRQABAXsiODhiMCI6IjAiLCJ2ZXJzaW9uIjoiMzIiff/iAdhJQ0NfUFJPRklMRQABAQAAAcgAAAAABDAAAG1udHJSR0IgWFlaIAfgAAEAAQAAAAAAAGFjc3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAD21gABAAAAANMtAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACWRlc2MAAADwAAAAJHJYWVoAAAEUAAAAFGdYWVoAAAEoAAAAFGJYWVoAAAE8AAAAFHd0cHQAAAFQAAAAFHJUUkMAAAFkAAAAKGdUUkMAAAFkAAAAKGJUUkMAAAFkAAAAKGNwcnQAAAGMAAAAPG1sdWMAAAAAAAAAAQAAAAxlblVTAAAACAAAABwAcwBSAEcAQlhZWiAAAAAAAABvogAAOPUAAAOQWFlaIAAAAAAAAGKZAAC3hQAAGNpYWVogAAAAAAAAJKAAAA+EAAC2z1hZWiAAAAAAAAD21gABAAAAANMtcGFyYQAAAAAABAAAAAJmZgAA8qcAAA1ZAAAT0AAAClsAAAAAAAAAAG1sdWMAAAAAAAAAAQAAAAxlblVTAAAAIAAAABwARwBvAG8AZwBsAGUAIABJAG4AYwAuACAAMgAwADEANv/bAEMABgQEBQQEBgUFBQYGBgcJDgkJCAgJEg0NCg4VEhYWFRIUFBcaIRwXGB8ZFBQdJx0fIiMlJSUWHCksKCQrISQlJP/bAEMBBgYGCQgJEQkJESQYFBgkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJP/AABEIANsA3AMBIgACEQEDEQH/xAAdAAABBAMBAQAAAAAAAAAAAAAABQYHCAIDBAEJ/8QARhAAAQMDAgQDAwoFAgQEBwAAAQIDBAAFEQYhBxIxQRNRYRQicQgVIzI3dIGRobMWQlKxwWLRJDNygkOSsvAXGCU1Y6LS/8QAGwEBAAIDAQEAAAAAAAAAAAAAAAQFAQIDBgf/xAAyEQACAgIBAwIEBQQBBQAAAAAAAQIDBBEhBRIxE0EGUWFxFCIyobEVM4HBkSRSYoLR/9oADAMBAAIRAxEAPwC1NFFFAFFFFAFFFFAFFFBIG5oAoyKxUsAbEUiTNY2GDeY1mk3iEzcZJw1GU6PEUevTtt50Auc6fPtmguIHVQFQbxR+UDe9Eqeai6Il8iZPsjdwnL5Y6152IxuRjekPjTrjiJo7SWmp8q7xrc7OlLYmLtSAvCCOZJQVd8ZoCx3MPOgLSehFVtan6gRwz1pOVO1s4+bYHI868JQ2NiP+WE7g48+1SRwYv6ZXCTTkmVcUuy1QcrLjgUtSgVdcnJNDG0SUFpPQ5+FHMN9+lVd4O2R7X+hdYuXG/XeEWL2uS3IjSFBaAhBPKMn6vpXTwMGsp+n3Nc3TXdyes1uck+LbnjzJdbbScEn471jWjJZkKB7ivQc1Wbhvxv4k6ltxuDMLTt9SJCm1Q0SBHmFAOxCM4O1WMZnBuAJMvlj4RzuBStm9snJ9KyDtormhT41wjokxJDUhlwZS42oKSoehFdAUD0NAe0UdaKAKKKKAKKKKAD0NUo44favqT7wj9pFXXPQ1Sjjh9q+pPvCP2kUBdeiiigCiiigCiisVKwQNt6AyzXJdpzNtt0mc+VBqM0p1fKMnlSMnA+ApM/jWx/xN/DAmJVdfB9o9nAJIRnqT0H49aU5DjL7SmnAgpWkgoWdlJOxrAICtXylvnK9w5sx7T1p0q8443/xMhapoSnIBKEg8ueoz2qP+L9tj6g4yXdNqhzrlcLnbmJNodt5BUl0JHKvP9OB1p46o4D3yTqG7QdP6V0hCsc5Hgonucyn2ATkrSP6+2Om1SLpmzcOeH8iIHLtbReLdDRAMmTISHkoSOmCdgazGLl4RjaGPHtmtOMPCK56V1RZJVv1Db1IEeZJAQ2+4g7b74PUEjanpqPhK/rzhvZdNahuPs0+3Bpa5ccBZC0DGU58x3p5J11pVRwNQWxR6AB9Of70lan11Ym7epES8RHX3CEhLboKkgnBVt6Vpd3VwctPg1Vle9ORHg4cwm3XYkrU+pNQqWwuIsS3/AKMJUMEJSnGSMde1cGn+BWnrNNTKt/zo65FyUt+2JWGzgj6oPqaefz5bYVsRGhT4q7hNSUpIWOZORgAfCm1G1JHCbY3GitW+TDdUw5cEugtSCNlJHc743PTzrzjy7ZKTnJppb0kWMI16XZpp+4vaI01YdJ2a46ZitSoTFyUsuurWSQpaeXJz0/tXbE4Oiy8J7hoOxXhbZlB0JmSGwo4cVkggddsitX8RW6/Wh1xx9tcpg8ocbSVJdI6pyNjS7pjXVobtSGp1wSh5pRbwpCs8oO2duuOtT+mXX2vtmnrXDImVbjwlrvW/lsjjRPCbUmlp9is110npW6W23uczd5YUpuS0QSoKUO+/beln5RmpJzNlt+i7NzG7anfERspz7jWRzk/mB8KkNGvtLrUR88xUlOx5yU4/OuSVrPRMqUw85fbI5IZV9EpbyCtCumx7Zq69Gz/tZwVkX4ZWrhvxC1NaYFo4X6cfS1eo97fblyFo5kNxkK369tlH4CrA23jpw8n3tdkjaliLnBfhjmylCljqAsjFNS+cEmbM5rPVWlpTrl9vMJwRW1gYYWvdXIR3V2PrULSbnpgcKYvDuyaamua3kvITJDkUhxl4L3UV9fLGK5m6e+UXWbUCgHPrmsgc9Kgd7j7atFXK0aRnofuZhRG0Xi5RwVtxFhIGTjqAdiam22z49xhtS4rqHWHUBaHEnIUk9CDRGTrooBB6UVkBRRRQAehqlHHD7V9SfeEftIq656GqUccPtX1J94R+0igLr0UUUAUUUUB4SAMk4rguwlyIEhu3PNMzC2rwnHUlSUKxsSPjWvUGorVpuGiZd7hGgR1OpaDr6uVJUo4AzUFam1zxF4Rank3y9lnUei7hI5g8xjMRKjsB5bdtwfOgI1i3e8aP1lMsGvJy7GTJVc7jdWAov3XkOW2kK7IONgMDzqdNGafvGv75a+Il+Nxs5jeIIFqDxCFsq+q44P6iOo77V0WjRcvXF/k37V7NqutmD7UuwoDfvso5c5UT+qTnepQQlLQAwPIVr5ML6HhbCE9ANsVAnEXhY9cNYS5BvVkht3RwLjsy3uR1fugEDbfcZ/GpQ4jcR7Xw/s6pkxSnZTmURorZ995eP0Hme1VgbtGpeN2p35D/ACSJAGVuOKIYhI7IHl+G5612oy7MaffV5ZJh01ZNbna+2C92SxF4NanQqM8mRaCtkglQcO/Y/wAvcZpSm6Nv1hUi5uMW51Kfo1BDvvcp2/p6Z3qLP4b4v8NEqbt8y6piIO3syhLax5BJ3A/Ctw+UDriGw7b77FtdxC0FCkSGlR3Meorrf1XJsi03z9itfwtj3PcNS+0v9eR7au0XcNQxrNOdbhMMxJaZZ5FFajjbkIwNvxppWiVqiTNnwlWaPbbJPkvtSJKWeZttCzkoQc+6cjI+Nc9m+UXd7UtTT2mY8xhZBUlMzG/mMisP/javwnIIsMpNpXI9oVEStBI97m5OfPQnvjNUH/UWuUrmk9ca+fzLrG6R+CqVNVTa+u2PrQ+kblpbShiIXHkRIq1qaddcLalpUcgYwd+2aVLRo2/3iO5OY9ibbceXypU8c9f+mo4vXyiLlc1BqPpVMeOjdCXJgG/rgVuX8pLVRhtwLNY7TBWMNtkrU+fwSAKm4OdmVPVrWkuPqVeT8H0TnK30n3S5e3r+R7v8HdRPSXnjJtqedXMnLijj/wDWmvK4NzG7mLe5qDTjcyQsrZjKkfSq+Axk4pAduXGjXSFMB69qZWMKRHZERBHoo42/Gky68ENYaZtR1A+014kdYdWpl9TkpjG/PnHY9cE1cR6vkpcfwKfh7ErepTin7ct8ltdPxpcKzQo051DstphCHFpJIUoDBIzvXJqbTSrxZp7VsdattyksqbRPbaSXG1Edc4zUbcFeNqNUhrT+oXW2r0hP0L5OETk+Y8l46ipnQscpyoHHWq/fduR3tpnVLtmVFl8KbhpTX1o0Lp29vxbjebU8LpcHWi63JJVnHKegHn1qQoWrz8n13Seib5IblWWRHUhy5KV7zb/N/TnZsVM14tPtSfbIceJ85stOCLIeRktKUMdeuDtmoOY4O2m3RbrrHjPemLjcJSFpVzrwzGScgBsd1eQHShz2WDjvNutIU24FpUkKSoHPMD0INbQc1BvAvizp64yG9E2oXMRYbOIEy4HKpwSfex5Y7DyqcUElO+KIye0UUVkAehqlHHD7V9SfeEftIq656GqUccPtX1J94R+0igLr0UUUAUUUUA3dcaGsuv7I5Zr7EEiMs8ySDhTauyknsRUKxvk5ayazph/WypGh1updVEdTl8hJyEdMAfA49KsZisVEJ3NBrZywYjVvhtRmkBtllCUISP5QBgCmvxE4j2vQNmVNmr8WQ4CmNFSfefX2HoPM9qy4i8RrXoCzKmzleLJX7sWIg+++v0Hl5mqywIGp+M2s3ZMhRXIXgvO4PhW9n+kDpn06nvXOT1widh4vq7tteq15YW6BqnjNrNx+Q/zvEZeeAPhQWuyUjz9Op61ZfSOkLRo6zM2y1shCEHLjivrvL7qV5mjSWkbVo6ztWy1tBCEbrcUcrdX3Uo9z/alWTJEWO474a3igfUbTzKV6DzNdq61HmXkq+qdUeQ1VQu2uPhf/AE0Srpbrc6hqZNjMOOdA66EqV+FIku6aVud+YsM2NClTZLJfYS6yHEvN4JJSrGDjG9RBxhkfPsxpF40381SSkiK8Fh59bfQkpSeg9elNFhT1luUa6Q705CkwGfdzkBsEEbc2wB7jtUe3NhCXY0VtcXH9MmWKm8KtDTUKD2mLdgnfw0Fv/wBOKa154RcNolxhxHbfHihfOXEe2LScYyOqqj7SWrrvH1ZCkXDV0wtuyEhXtKeZmT5JVy/8vr8DtTb4n2WPD1reWniqcpLxUl18lauUjPLk9hnasXZVcIqWj0PRMHMz7JVQucdLZO8XhTw2t0N25N2WHJZZSSXXHlPJ269SRTUtVxgWe6ybrZ4MYMgJQw200Et+9jbp3339KdPBK3RofCWy+yN+F7QwuQ4AcgrUTk0m2iKuLcX2rsIoYL6y0lLZIcQrfJBHQEZz51QfEGU6u2UDbAlJqyu2Xdp+5Ilru8aenkS6kuhIWpIVsAeldpQlwkEA5T8QR/mo7uFpnQSz82raZU88ColZSFhOVIAx0yNiK0DXFx0zMQxdvFdakOhCA4NkAnAIIGw+NcekdelL8lj7v5IN/TPUbnSM3i/wcdtTrupNNIcRFC/HdjsbORV5z4reO3cinfwU42p1N4Wm78623d20gMyNgiakd/ReOoqTxhxKVcqClSc467GoD4v8HXrUpepdLMOIYC/GfjR9lxljfxGu48yBXq3Hjuh7nfDzI3x/DZP6lxF/6ZZVK8pAJBPpUIfKV0P88W626s9mfuTFkeC5ttC1BMiOT7xAB+sPOtvBTjcjUfg6c1C+hu8ISPAfOyJyR5eS/TvUyrbS63hfKoHqMdawns1uqnVNwmtNEMaN4OF+HDci3BcS0wpzd2sL6BmQw2sZcYUFD6p6VOCBhOKxaSEoCR0G1Ziso0QUUUVkyB6GqUccPtX1J94R+0irrnoapRxw+1fUn3hH7SKAuvRRRQBRRRQATimbxJ4jWrh9ZDPmr8WS4eWNEQr331+Q9PM08Fo5xjOKjbi7wbgcRozUxL6oV4hpV7NJScpIP8i09CCaw964N6uzvXf49yvkGDqrjLrFcqSvL6seI7v4NvZz9QDz/U1ZrSekLZo2zM2y1s8iEe8tSj77q+6lHuTVcuGWvLjwz1XMs95aLUYPhm5Mn/wnBsHU+acYz6VaUOIcaQtG6FAKSrPVPY1mlL38nT4gtmu2qPFPmOvf6shDiTxvkRpsyyab+gcZKmnZjgyrmHUI/wB6YsTjbraKptRvLbwa6tvNpVzgdQSB1PpSzxE4F6pXq6fctOttSYExxUn6R4I8FR3UMfniomtOndQagu8e22pgSZbzim0NpVypQRnfPkADvUax2KemympxpTg5Q8IfblzmcQ4V1u8u5rauQWynwW04LgUrAwT9VtI7DJJ69a02eI3ddTWq1N3aNGEyO+tlgFJwEA8gdzsecg9afWifk9XOHZbk/d5yEXSUwW4zCMKQy4CClZV12UO1RhqHSqLXqR6yOxPFlMKSyhLSFZWeUZ5fPJzXC6v0/wA01suei9L/AKha63NR0vclThjbdP6utN3sepIsdLltklLKnnUczXOn3koUD0BGxpj8UWI8bWF0aiu+Ow0lCEuBfPzAIxnPekJGgrmgqUNN3IKVvswsZ/3rQ9b1WvnivsLYW2MuNLBBR8c71Dy8lSgo9rR9C+GPh78FkSsV8Zbi/HJYbg3qqww+GWn40u9W5h5uIErbcfSlSTk9QTSnepmlJ7jktvU8BuQhlSWU+2pDSFY2VgHNVm/g9022LdRYXTBmuJRHkeCOV1SjgAH1NdVw4d3e1RFypWlZkZtO3OqMNifhmu984XwSsrZ5yfwpCMpThlx9+CWZt4u98t+NPCReIni8plxBzoXy4O2T1ChjPWuGNZtV3ec4xPts2NGW6FNrmOK91WPeK1g+Q2Haos4a6il2Bx6zSrRFuDq3ihtua+4gRcZyOVBBySO9OaXf13PUNuiyLTbbfEjyW3ZiIkl8+0tKdDRQQo+as/hW0OmwqrUI+PJWRtcINaXHuWZtl2tckiJFuUN91pIBbbfSpQwPIGlEjnBBwRgjBpAvPDTTkq3Oew25i2PsNlUeVFR4bjSwMghQ6jbfPWtuiru/fNK224SgPaHWsOEDAUpJKSR8SM/jVrVLjtPNZFPp7tg+GQ3xf4Mqgrc1HphtaEc3jyIrOy2VjfxWsfqmnTwV41DUCWdOamdQ3eEoxHk9EzUj+y/TvSrxj4i/wPp9LUNxv5zm8yGOYZ8JIHvOEd8dvWmJwM4MJvK4us9RBfhc/j2+IQQVHOfGX8TuBXJrU+C9olK3DUsn/wBfmWSb+oNxn0rYOla2kFtsJPatg6VuQ0FFFFDIHoapRxw+1fUn3hH7SKuuehqlHHD7V9SfeEftIoC69FFFAFFFFAFYrBOPLvWVeKOKArb8pzQ7ca5W/V0dsBEkewzcDZRx7ij+op8cC9Rqv2go7Ejn9ptijDcUtWSsJGUq/EEV3fKHYQ9wnvTivrMBt5B8lBY/3NRDwFuE9V1vltZmPMMeG1I5UYwVHKf7AVxlYqpOb8E3KUbelScvNb/n2Jl4r3aVZOH95nQHPDlIZ5ELxko5iE5HrvVWNK6glWTVNtVbuYzI7zayjOCsKOCkn1B/Wp24l366W22OW8Wa9X6NNQWXfBKQhII+BOfwqDIsK+aeu0e6S9J3JYjrS6oJYJVgbpyR3G1Q7LlbNSRD6TlVrGnGWk2XPSOY4SQCANh2qD+J89DfGPTCRgKZVHUvHUcyzgn44p0WnVV1n2BV0ks3SC8EBYjvLQCsEZBB6YqCNYXm/wB04gPXQMTSG/CW0opCnGkpO2QDgkHNdLMmN8dRXhlf066Mbpv6MuCh1ajynIHbfoaqvxjUpPEK/EqPVI6dfcqWNJaxkXy2pkS51xhrB8NRfSAtW/1uUDYGoV1fIn6gv90uCbbc1JcdUkKXHcUSE+7nIT3rlmXerFRjH5Hq/gW1QzLXc9JRfkmrh9ppjVvA6w2qWpbKXIiFIdbOFtOJWSlafUHet1wumu2SzpqTCi3aQGwsSIzvhmS2DglYV9QjAzjrnavOCVwVa+Hdst96fbjSYwU2lCgoEN593ORscUu3m4xW7jHvVtuEJx6OktLbW6BzoO+AfOrC7mpaWzzDnOvJkpeNkM604Vz9FyrZqKXdGli4znPaIbaMpYWpClDlWd1DCcHPetukuDS+Ii3b4meiIITimW21AkPLBKsKI3Cfe7b5x5U8uL2pjfdGH/6cWExng4Xy8laW1EFIG3UnP61r4S60i6d0q6l233WUJUp1xsxIpdBICRjPY/HaucJxmuPYsHLVXL4M7IjXsW6ytCzZkeGxJZMqPLL5kOoj/UWhBIG/lzdM1Kdptce0W2NbYieSNGaS035gDbc9z601tLwLveNSytW3mKbcHGBEhQlKy40yDkqX25lHsKd8hwpju8mNkK6deh3qRStR2yjtu9WXZ7FYtTlfFDjQizKJVDVLEQEb8jDW7hHxNWzhRGokZphlAQ20gIQkdkgYA/Kqt/JsQiXxQukhwc7jMN1aSrspTpBP41aps5TvWkVvk9HmNKSrj4ikZD1ooorYhhRRRQAehqlHHD7V9SfeEftIq656GqUccPtX1J94R+0igLr0UUUAUUUUAVg4oY3zWROKTL3cRBt7r6C2XMENpWdlLP1R+dYZjgjv5Qt9gtcNbxa0SGlz5aUNtxgoFw++CSE9e1QVw41CvR1wuU5yCt9ciO202lTgQAUkkk/nT4laS05AuEi5a71tHduMhZddjW1POpJJ+rnc4/AUh6h1rw7sE+1u6esDkxcV8rfRP2RIbKTnlKiSFA4I2qrulKx+ntJFfbm5E6ZYqaUZc/N8HWrilq+8qWi1tISsnCUxIynlD8d63t2HineQnCLyEKxnneDIPxGRWiF8px66O+y2e3WqzLAOG3W1LVgdgUgDNJ114s60murHzzPWnOB7CwEoV58pxk47kVHlixj+rb+yKp4SXEu5/ZCxM4MayEF6ZcpERKGEeJ9LLUtZA3I6YHSnAr5QEOOhIiaXZC+UAlx9IAH4JqLk3mdqZS2LrqGS1zHKkXFboSQk79EkYqfbPNslzjeJbrNpRxpgpQomQnYEZBGEH/2K71VTUfy/lX1JePTY1qpOP35GLJ+UROUrMay2loDs4tR/sBXN/wDMRqJW6bdYAEnO6XMf3qVG3ZJn+z26LpkMra8VCkp5sjOOo6716uTfm2rgswtPhUMFSk+ErccpVXR1W627P2OypyE9KzT+xGDHyirv1dtdjczvhHOM/nmu5r5RbTjgRI0zCUO/hvDJPwKac2qdds6RszdwvbumGfECSiOGlKcXnGwSNzjNMCT8ojTvtTrY4dKnNskAvJZS2pR8wgjOK6elke0/2CoyJeLP2Oe8WW5cYLvL1BZokaC0whuMuO48RzKG+dhjuN8dq1NaP4pae+hgyLg20joiLLBR/wCU0hX7XMK9agXdLLHf0+2ptDSmm0rR74zn6oxn19K7Ymr9UMKR4Op9lAE+JIS6UHyUk5Ofwqhy6uoq1urWv8no8T4puxqlj20qaj/4rkU2uJfEvTKlJuTTj7adv+MiYA/704pw2z5RUV1lTd1szyFKQUlcVzmBOMZwcbUktcWLzboi3J1/0zKCE8ym5C+RwgdgnYkn4U3YXFzT2r3G03bSUVRL3M4/HAJaZ8u2Vk+uwrenM6nBP1YcL6/6Jn9V6RlLvyMbt+q4Or5Os+PaeI85c9xMVqZDWhtbxCQpXiFQTk98GrWNPoLYUDkHuKrOrS3DXUS+S23t60vr38J8kDPpzf4NTJw1VKttqbslwuLVwfigeDIbO7rPbm3O46VN6f1iu+XpzXbL6kfqE8O1q7Fnvfsx9A5GRRWKFgpBG+ayByKvCtCiiigA9DVKOOH2r6k+8I/aRV1z0NUo44favqT7wj9pFAXXooooAooooDFRwk1Xn5Tmp7jbnLbDTDdTAbBfD3NhLzp2CAR5CrCrIx8Krt8qPUqXl2nS7fKR70+QkAEkJ2Qnz3O9cbYKUXFm9WL+Kmqfn/Ax+GGkblr+eA64mJHbIW54adh/pUTv0qZl8N9K+ym3PWRmFLT9TDhw8rHRLpyQP1rt4L2CFZNGxltEe1Skh1/H1056JI7U8pjDEppbb7aVpO5SU/8AvevP5XUIYMt9qMX4GMrWsaOkir2ueAM+LHXcha0FPOQ3brOHHXlEg4Ut5fbpnaoCu1uuNnmOx5bD0dxlRbWhZOUHrgnpn0r6D+JLtKuQKXNi9OVRy6geQ/qH6/Gk+5WGy6hQ5Mbg2+atSvpmn2UrS4QO4I2WOmetbw+JcScO+v28mkK7IvtkigDdwnMkKbfeQUkFJCzt5EUuWjiBqO1OpcYuLvKT7ySkEuDuCepq0tx4B8OtRNurYtjtrklJCkx3SC0rz5Tt/jFRtqH5Kz0eelm0X9rwnE5aMtvBzndJI9N6Y3xR0++Tr7u1/Jnf0J+SwOgf4T1Jw+tN3DEdUZ2L77r6gHE9edKlZyN81Ta+a/vFr1Xd1QLvOkwy84y225Kd5S2FEJBwrJGPWn01wJ1vbIMhpq4QptsSV+PE9pW2nIG6gOxxuDTS1bwJ1hpshxuGm5xVNoeD0M8+Eq6ZHWrWjqGJcvyTTOcq5J8oRHtV3u4tO3KM3HjqjAJcU2nmUQrOCSvJ7dqbz10nPKDzrzri+y1KJP55pSg22/wJ4jxIM5ubzFvwwyrJ/wBJGMH8asfw4+TzpzV+gkXe7QZLN6lKWXUkgFC0qx7iQQAD5Gpkpr2NEtFXUT5gIIfeBxgEKP5Vmm83MK9yZIT7oRgOEbeXWrTJ4FaKtAcMixTHvBILj0nPhgZxupKv7b09Lfwm0O+hC/4WgRYTPvJC0ZcdOc+8TuE+nU1VZfWacWxQsi1v3N1XtbRT3T+ldQ60lf8ACQZVwUnryr94p8kk9fwqzHDnhbbGoMZ/VMF5YYRyQ4DqFBfMfIBKeY/EGpPhsW+Ovk09aocVISEKktspSkAeQG6sUtW63sxnC8St2Qoe9Ic3WfQHsPQVXZHxRixl6cHtnP8ADzs/UtIhvibwsNssT19ssYwxHOXImS7lvupRPQjyFRvwy1pdoGsoPsUR1+Q28GlR2CT47a+pA6dN8+lW5lKjmI4iWW/Z1pKVhzGFDuDVWbdJicKOMsZ6G4h62qkCK4opJUGXT7pHwOMEdqm4fZfqxLRvV06mUGoLU1zv6FvmFczSFAYyM48q2CtTGPDGCCOxHeto6Vdmq8BRRRQyB6GqUccPtX1J94R+0irrnoapRxw+1fUn3hH7SKAuvXilBIyele1onIfciOojLDbykkIUeiVY2NAbQ4k9688T0NNBUHULU1Kvnhk/SJWWSr+QJxjpnruazjW7UjhUFXiKpxIAV4YI3/x/msAdiveSaqNxGxqXjvKjPvtoaEyNB8QnZCEjmI/OraoS4lP0hBPmNs1T64teHx2msyACBqFBPMNiDjtWlr0tlj0yKdsvpFloDboM4c6AkKTjDrCveH4j/NczjVzhE+G4mYgfyujlcx/1dD8Tiu2VZIS3A6hoMLSTgskoI/Lb9K41w58dR9muTikdxJSHD+fUV5HrHUcKxOF0dfUqqMe2D3Fmj52YJDT6Vx3T0DqdifRXQ/GuWdDStZkMOFp4jdSDsr4+dbpMicG1Il25mUjzZWDn15VdTSI67DYypmW/AV3adQeXPng9Pzr5pZRWrXKiXDLqlSl+s5L5qRu0KZduSVRnyoNNvtI5m179/T411mWi7ROV3LayOYKB5sHspJ71DvEPXS2bqUXYgtx3OVlDW6VAY3PYgjf8qXeHNynTNNmQhTrsTxFeC04MK5R05T3Hxr0WR0dQxY5HhkzHh6k2tcD8iTUuKcbdHI6QG3gP5jjAV8CKTl3Nx5lTK1LT9Chg8pwpJDm35YpOn3ltK0SmV8j49woUMdexz5HzrU4xcXFqfbEb6RzmVl3oMHJ6dCeldOn9PtnuXhHfIjVDhi+ZVtusFKri05BUltCEOtugeN9N7xz2PfelZrUEDSVgkptdvWptDrjjqC6Ssr58OKz3IylWR1B2piNXErWG5eUsNhJ8PqCcYGfTv6k13KbalMrK0GLDHvrUdyvYgnl+Hn516SrrssZ9l8N/JkGzpSsXfBipIu0abMgoYbTMkZElHhoClJSTsedPuKyf6gCKcbUd+cee5LJSDsw2fc/7j3P6UgWVEeNEU3bWG0Z33GMnzURv612IkMrVyzrkV+bLRPL+ONz+leR65n25t/cl26/5Nq8VVwHAq6RGMtoPiuAYDTCeZQ/AdK2tqus3AS23BbIHvr99z8ANv1rjt0pbbZEG2nlOwUoBsf7kV2pTdpIAclR4wHQNN85H4monSVhUWd9/n5Ffkeq1qDOpmyxkueM8VyngB9I+rm5fgDsKr18p23NC9w7jHW2pT0NSFFJGUrbVkHb0xVhmrGw6AZT0mWRunxnCQk/AY/WoS+VIyxFh2pMdhtsNtvKUW0hOSoYAP5V9Swuo1XwUKY6Ry6ZRKOTub3tP+Ce9HzVXHStomKOVPRGlk+fuilrmApF0fGETSlnjpSUhuEyMHt7gpRkSWmEqC3W21EEjnUADVyvBHfD4OgrAPQ1kDmmaq335LDaE6gb3SCs7ZznKgB/Y9qcVreUiIyy++h2QlIC1JOOY+YHlWQKB6GqUccPtX1J94R+0irrA5TnpVKeOH2r6k+8I/aRQF160zHkx463lnCWxzKOM4A61urFxsOJKVAEHqD3oBk3S46VuTzkuTIUFgIaK8lJGFbdO2TvXTp6ZZbYl9qHJdIU8hK1OKJ5lq93OT6pxTjXaYjhyqOye27YNertURzHNHaUR0JSNt8/3rBg38wKcZyaqjxeYRpvjY7cZLShFV7POykbrCQQrH4gVa/kwKgP5Umln3Lba9UxG+YW9So0o9wyvor4BXWtLVtaJ/TLI13x7/D4f+SUIV+kXK3x5se3LW1IbS4hSXknmBGc14qdKzva5Of8ASQaiXgjqh252VywO3SSJFu3YSleOdg9Mf9J2qTPCmE73Sbt/rG1eT6l0fDyG1Y2mLMTJpscNJpM3vTJCN1WyZg9ktgn+9Il5vRjQ3HHrRcfBBAIdZAQcnzzSr4csD/7nM/8APSFqXx8Q4q50l5LrwUtK1ZGE79O9efs+HMDGi7lJ8EjHjkuSTS0NK5M6WuqUyLkhUCUHUpYIYQr2jmUAltA8xzJz+PlSvabJPuDDgt5WEtLLfKpsBIUNj6j4U0eJYbcvOlkp2SNQJCsdfqo/KpksKAhlYSjA8V07dPrqr1d3T6pYFFjj+o5132Qtkk+BuQOHd1FwduDxgqbKUkNvrUrcDfIG2PIGlg3STbnmID1ujvPPZDRYd5EApGdydxTjeUURykkYH6imZOeUL/bMnPvO/wDpqHmOGLOMIryjpBzu25M2XrQlzvLKnGvmxl9W5CAoFQ8iehpDf0zebewUSApptKcFxv6RRHfc1JFtkZSG8kAnOc0ha7cVEtLwQ5yeOQ3zEnCQc5/QGpMcCrJrjLW2axy7K01J8ETaadZZuLCJKXnvEyeVxRJwRkE7+hAFSVBfdYCVxrJcuQgcqm4wAUPPrvUd27xHXROQ2XEMlK3QgnKPdxyY6EpTj471IlgmPTYxSm5SUhP1QheBynpVf1np+JkZ3p2eO1ePmMT15YqtS53+wrRJchajzWi5J9VtBP8AmulEqSknktkjGfMCuMNTBki6Tfjz0eFLO5ucw/8AfUKHwt02D7u6WzjOOU9vSFVifNycWp0j1dSKgHjFqFnWOqIulmYzonN3ViO4jIUnlOAoA9+9S3eriqx2mXcZF0loajNlw/SdcdB8c4qH+Amk5OrtfSNVzUqcj2txThWvcuy177/9KTXqenYVFUUqkdKKbaoSus+Wl92WliM+zsNs4GG0hAx5AYpG1FY4M9ft011xtMZtXvBeAlOxJwfgKXWwQgA9cVi4wh5CkLSlSVDBChkH41dlaR7Eh6QlSSw1JkuLdQfdLit08mTj8DvinDp61W9xLFyt8l9aQwlgKcXzHlTnr6+dLSLTEbUlSWGgpOcK5BtnrW9iIzHQUNNIbSeoSMCiBs/lqlPHD7V9SfeEftIq6/8ALVKOOH2r6k+8I/aRWQXXooooAooozQAcY3pta7u9gtOn5B1E80mBISWFtrGS7kfVSO5pxqPpmmxrvRts1taPYZvuLbUXGHh1ZcxjI860sbUW4+TSbkotx8lPLZev4M1kHbS88lqI8pUNT2El+OT9RX4bflVodPait2pbY1cre94iFgcyf5m1d0qHY1E2rIHDWFpaVp1cVyZqRpfhiU0TzJdA/wCYHOnJ5pHwxUZab1ledA3dAMlDbmMKIOWpCfJQ7Gqq+pWRW3+Yu8DqFeXGNN0tWr/hluFkbgn0GN80wL5qBu8akVCtDiHJUJtTZWRlCHDjOT6bZ+OKblx42NXuytQrY2uBcZa0tOuuqHhsNn6y0K7+mcU1LNoTVdvuUp1harhBdcPhvMyPBLjYO2eYg+vU1AfTpWQcX+5Lsl+GTdie/YWzb75qucltm2OtuWCeZjp9pQoLWAMq3Gd8A49akXhXqO6aiZmzZTSo8Fl1xgMDLqy6FcylcyRgDfGK5tG2uw2qO+HG5kR+Qk+0Bt1Z5ieuSM5z8aQb7FvEKO5H0I7PhJLinFeFK8NOT3IWRk/hV64xdUa5vhL2PPxk3NySJcuN2a8EkMTNup9nX/tTInXOKq9wFh8ANl0q5vdKfd7g9Kj2227jRFYXMRfp9xlqdHLH8clKEY3KioBP4DNL8S5cWnmHV3DSVnmTY6cx3pLiPECj1I5difjiqTqGBXk2KblrRcY8ZV17TT37ErWh4yEoU2lwoUOYL5CEkfGo54t63jm5jSUpSbYFqSpqe+FKCzynOEp8s43pk6nuPGdthyfcEz4jKfcSiNIQlKSTt7qTTXvFzu0OSmVqJQS+w0HeZ0FairP1fU1b9Hw1CLj3cETqEHDT7k2/kSBpnUSGrkdPQ1RbkAvndeYQtBbyOqgrbGwG1LarsrR0pbqkFyEs7oG3hjOSP77fhUSePdbrFeulrQ0tkjxQoHlWlSSMDzOeuPMU/rRqbUGttPPtt8OI05TSTHclmUhBW5jqUkZ7io3Veip2K6EuPdHbpuelH0ZLj5kuRJ0edHalRnEOMPJC0LSdiDW5xaW0FSyAkDJOdgKhnQt7vfDpL1v1hERAthSVNf8AEIdcSvySgHOD+Qpo8R+NU/UfPbLcFxoiiQGUH33h5rI+qn0qEsWcpc8IsZ0xTcu7UF7ijxm4npvyhY7OvnhoXhTid/Hc/wD5H6mpc4E3/ScbTsbTtqlui4tILshMlPI4+4rdS0juO3oKhThqrSthbkv6zt7UpyW2cSiOdLQx9RKfP1qbOFXDrTEZxOq4DolB/KoieYkREn+Ud+bzJ+FS8S9u51Rjwvf5kKeViZWNLtb0nx8n9yWmyS2Cep862J6da1oICBg4xWxBBG1XJSJcHtFFFDIHoapRxw+1fUn3hH7SKuuehqlHHD7V9SfeEftIoC69FFFAFFFBFAa3yoIPh45iDjPTNRHrfTnE27odDFygOQyTiLFUphSh2GTkk/jipfKc1qW3yg4OB5Ab1zsrU1pnOyCktMry3oTSFhtbx1tPcRcFM5RFZBSWyrbmQP51ZHXpUao0fEvVz+boLM+Y3JUA0y8QXXP9SuXYf4qc9bcMb1rfW8iVzsQrY2y02iQvC1nb3wlI6b+eKe2j+Htm0Y0PYmi7IWPfkunmdc/HsPQVV/hrJS7IJRS9/dkB4s3PUeEvf3Igd+Suy3ZWFWu9OwLpjLrbifFjq9AOo7bimkvhvxZ0Q4oQYUmQ0k557a+HEK9fDV3/AAq2qE9hkAdK8LeSebNWfoxcUmegx+o30xUU9r68lPzxS17ZFct3hKTyHGJ9tKd/inFLVs+UFJS4hM+yQZRyOZUZ7lUPgk/2zVonIyHU8i0hafJSQaal+4RaK1Hzmfp6D4q+rzCPCcz58ycGuM8OL9ybDqtUv71Sf1XAyrLxZ0pfFpb9vMKSrGGZY5DnyCvqn86d4KFoCgoKCgT12I9POoq1v8mOTCZclaQuSpSQCr5vuBBKvRLn+9Rzb+I+rtDsy7EpTsF9v3fZ5zZU4wf/AMQPUeXUVX29O1yibH0bl3UT/wAMsVedQ2jT7CXrvcI0ZtWwDqhk/AdTUb6n45WWKOS125E9Q2D0kBtv9Rk/lTf0nwW1lxGfF3v0h61xnsK8eaOeU6Dv7qOiR5ZqbtJcC9F6YabWLWm4y09ZM8B1ZPmAdh+ArtRg9vOyPPJxqHrXc/p4K+I4n6/vq/Z7LCVucBNstnMB6ZIIpRTYON1xBLVtu6Q6f5322An1IGP7Va9qK2wkJZQhsDYBKcAflWZaJIPN+nWp6oj7shy6pJf24Jf45K46c+TJdbq6JetL4Wgo5VHgqKnVf9Tqv7AU0dacJUaEnqipadTGeURGmAkhwf0qJ6HG1W7Ukg9RiuC62uDeYbkG4MtvxnByqbcGx/2rlkY/fBxi9FVnWW5Ufzy5K1aY0voWdan4cybMjXNRC2lPEfRnoA3jZWSeh3pY05wp4lWO4rVY7kzBjJXkOOukJc9VNb0u6m4ESIvNL05KEhCVeImLK+skg5ASv/f86mmAhaoLAeAS94aeceSsb/rVbgdPshJyskyT0zqWVjUuhpaf0/c4tONXdm3Novb0V+aB77kZBSg/AGlhvdNYhrbGazAwMCrw4NtvbCiiisgD0NUo44favqT7wj9pFXXPQ1Sjjh9q+pPvCP2kUBdeiiigCiiigCuS5vqjw3XUNLdWhJUlCPrKIGQB6npXXWKkBWM9qArzofjFqyLqp6x6lskjxXwuatlRHixELX7pV/KhtKBnc5NP2/MMcQoTF+0zfnJYhtv+xxobvhNvyQCPfV/SCBtTg1Zw6surmHWZrTrYfKQ+qMsNKfSnOErUBlSRnOKhrUvCzWVhtttbtdwW41bVcrT8bm8QuvO/SPkDGORAHYg77Vjx4MDosnEHXFhudusuprIAh9aAZbzuXA2okcx5AUZTjfJGxFPjTnE6x6jmOw4q3Q6iU5ETzJ2WtHNnBHokn4VF0Tjpd7fLk2+82luUgJXNZcKChTluQkjxSP6ytIGD/VSvp3VugpMSLfZltb0y+uSVMYeB8RwoBWQEZHQjmGM1jkEuKu8JClIVJjpWnAUFOpHKT0B3710eMNvdJ/xUfau0JZb+iY4/c49vcvPgpW6tKOZfJkp5OYj3t+o3rg1LoDVVwvd1ulm1EIiH4oZioC1gpIQU8pH1QMnmyN8gU2NknqIUQojc/nSPcdLWW7XKJc59siypkIksPONhSmz6E00b3Y9fJi2NGn7jFY9nbPtyXVlQeJUBsTv9XJB86TImneJ6vbFLvavGD/KgOvpKFIUvCloATlISjGEn+ahjevBLKcg79xvgdKPH5Mgg/HzqGl6H4ofOEnm1XNMV1C22uSQgFBK9lqyM7J8u5rJHDHX0l+C/M1Yl0odLkkKLm/TZAGAMbjfzpsJkuuXaGytLbshltxZ5UoUsAqPkB3pAufFDS1sD4duSHXI7qWXGmElakrJwBgeu1R7aOE8LS8m2zr5q9h1+E4p1PthSckhJI95QOxTkHrvXus43DXSdxcnajNwnKu4XKbjJKltJSFJUtaAnHLulJJzRBMcOueKEyy3RqzWi0GfNfjCUzhXMSnO55BufgP8AFN6227XuqWUSdQyBZl+0NyIzjrqQW1cw91DY65TkYXWq8cWVx/HOm7HERGYeTambi6oLdS+pAU19H9YtnIHXO+a5g4vi5K0zcUwrkgJb9nvUV1C2WmST9dBP/ioWMgjsaGRR1/xp8CNeLVpxT0a6QmlOtSX2eZD3hLAeShOclSQc08eF2pdS6jsaJGpLOmA4pIWy+hY5ZSD0XydUEjqDXPpHhHb7LGHzvJN+lonuz2ZMlsJU2tYwenXYYOetP1phDTaUIAQlOwA6Y8qykZ0ZpzjevaAMDFFZAUUUUAHoapRxw+1fUn3hH7SKuuehqlHHD7V9SfeEftIoC69FFFAFFFFAFFFFAeFOaxLKD1G9Z0UAgaj0PYdURXo90trEgPs+zuLxyrLfMFcvMNwMgHFMbUfAWDd4MGDEvMyFGiLK+QtocKiSCFBWAQoYA5vLrmpYrH+YVgEK8Q+EWo74YBhyhd1RipTTs54IWxzEZTjGFIwDgbKHnSBN0zxRgXy+3oQZbhu0CTFYZiyfEEbl5fBPKThJ2O486sMDsD33rWAF8yVbgHamjGiAWNPcVpNk1Cm5zLu1crcxGbtjkJaUCasD3zv6Hf1TSqiVxHtWvLUxHg6jnWGGGY8hx0IUmVzj6V1RznKTgD0BqaQhIa6dc/3r0JA5wBsFEU0NEVaqa1ivXchxP8RfNLLcYQBaijwlrKsO+Nzb4Ax+HSmAzo/jDcIbrEp+4eIfFXFUuRhPiNP8yA95BSNkkbEdasryjB27UBCfEIxsQM00NEFTOFuq9SCXJk2e0tJm3hM9yPPf8ZbbSUJ9wKSNgpackDttTrvnBdGrHYcy8XmaJbBUShshbLaVJ5VNtJUPdT+fQVJgPvflWaeqvjTQ0M6x8JtJWWRCmtWlp2fDbQhEt0lThKRyhSt8FQHfGad6WEDdIA+FZ16OlEZPEp5RjNe0UVkBRRRQBRRRQAehqlHHD7V9SfeEftIq656GqUccPtX1J94R+0igP//Z" alt="Escudo de la Unidad Educativa Satélite Norte">
+    </div>
+    <div class="titulo-institucion">
+      <div class="eyebrow">Unidad Educativa</div>
+      <h1>Satélite Norte</h1>
+      <p>Warnes, Santa Cruz — Bolivia</p>
+    </div>
+  </div>
+  <div class="plataforma">
+    <h2>Protección Estudiantil</h2>
+    <p>Sistema oficial de denuncia para casos de acoso, discriminación, difamación y abuso dentro de la comunidad educativa. Tu identidad se mantiene confidencial.</p>
+  </div>
+</header>
+
+<div class="banner-consulta">
+  <a href="consulta.html">
+    <span class="icono-banner">🔍</span>
+    <span class="texto-banner">
+      <span class="titulo-banner">¿Ya enviaste una denuncia?</span>
+      <span class="subtitulo-banner">Consulta el estado con tu código anónimo aquí</span>
+    </span>
+    <span class="flecha-banner">→</span>
+  </a>
+</div>
+
+<div class="stepper">
+  <div class="stepper-tarjeta">
+    <div class="paso activo" id="pasoInd1"><span class="bola">1</span> Correo</div>
+    <div class="paso" id="pasoInd2"><span class="bola">2</span> Tipo</div>
+    <div class="paso" id="pasoInd3"><span class="bola">3</span> Denunciado</div>
+    <div class="paso" id="pasoInd4"><span class="bola">4</span> Descripción</div>
+    <div class="paso" id="pasoInd5"><span class="bola">5</span> Evidencia</div>
+  </div>
+</div>
+
+<main>
+
+  <!-- 1. VERIFICACIÓN DE CORREO -->
+  <section class="tarjeta" id="tarjetaCorreo">
+    <div class="encabezado-tarjeta">
+      <span class="num">1</span>
+      <div>
+        <h3>Verificación del denunciante</h3>
+        <p class="subtexto">Ingresa tu correo electrónico. Te enviaremos un código de verificación real para confirmar que es válido antes de continuar.</p>
+      </div>
+    </div>
+
+    <label for="correo">Correo electrónico</label>
+    <div class="fila-correo">
+      <input type="email" id="correo" placeholder="tucorreo@ejemplo.com" required>
+      <button type="button" class="btn-celeste" id="btnEnviarCodigo">Enviar código</button>
+    </div>
+
+    <div class="bloque-verificacion" id="bloqueVerificacion">
+      <label for="codigo">Código de verificación (6 dígitos)</label>
+      <div class="fila-codigo">
+        <input type="text" id="codigo" maxlength="6" placeholder="------" inputmode="numeric">
+        <button type="button" class="btn-rojo" id="btnConfirmarCodigo">Confirmar</button>
+        <button type="button" class="btn-fantasma" id="btnReenviar">Reenviar</button>
+      </div>
+      <p class="estado pendiente" id="estadoCodigo">Enviando código...</p>
+    </div>
+    <p class="estado" id="estadoCorreo"></p>
+    <span class="insignia-verificado" id="insigniaVerificado">✔ Correo verificado</span>
+  </section>
+
+  <!-- 2. TIPO DE DENUNCIA -->
+  <section class="tarjeta bloqueada" id="tarjetaTipo">
+    <div class="encabezado-tarjeta">
+      <span class="num">2</span>
+      <div>
+        <h3>Tipo de denuncia</h3>
+        <p class="subtexto">Selecciona la situación que mejor describe lo ocurrido.</p>
+      </div>
+    </div>
+    <p class="aviso-bloqueo">Verifica tu correo en el paso 1 para habilitar esta sección.</p>
+    <div class="grid-tipos">
+      <label class="opcion-tipo">
+        <input type="radio" name="tipoDenuncia" value="Abuso">
+        <span class="caja">
+          <span class="icono">⚠️</span>
+          <span class="etiqueta">Abuso</span>
+          <span class="descripcion">Trato de poder o físico que causa daño</span>
+        </span>
+      </label>
+      <label class="opcion-tipo">
+        <input type="radio" name="tipoDenuncia" value="Acoso">
+        <span class="caja">
+          <span class="icono">🚫</span>
+          <span class="etiqueta">Acoso</span>
+          <span class="descripcion">Hostigamiento repetido, físico o verbal</span>
+        </span>
+      </label>
+      <label class="opcion-tipo">
+        <input type="radio" name="tipoDenuncia" value="Extorsión">
+        <span class="caja">
+          <span class="icono">💰</span>
+          <span class="etiqueta">Extorsión</span>
+          <span class="descripcion">Exigencia de dinero o favores bajo amenaza</span>
+        </span>
+      </label>
+      <label class="opcion-tipo">
+        <input type="radio" name="tipoDenuncia" value="Difamación">
+        <span class="caja">
+          <span class="icono">💬</span>
+          <span class="etiqueta">Difamación</span>
+          <span class="descripcion">Rumores o mentiras que dañan la reputación</span>
+        </span>
+      </label>
+      <label class="opcion-tipo">
+        <input type="radio" name="tipoDenuncia" value="Ciberbullying">
+        <span class="caja">
+          <span class="icono">📱</span>
+          <span class="etiqueta">Ciberbullying</span>
+          <span class="descripcion">Acoso a través de redes sociales o chats</span>
+        </span>
+      </label>
+      <div class="opcion-tipo categoria-expandible" id="categoriaDiscriminacion">
+        <div class="caja" id="cabeceraDiscriminacion" role="button" tabindex="0">
+          <span class="icono">✊</span>
+          <span class="etiqueta">Discriminación</span>
+          <span class="descripcion" id="descDiscriminacion">Trato desigual por origen, género u otra condición</span>
+          <span class="flecha-desglose">▾</span>
+        </div>
+        <div class="subtipos-lista" id="subtiposDiscriminacion">
+          <label class="subtipo-fila">
+            <input type="radio" name="tipoDenuncia" value="Discriminación racial o étnica">
+            <span>Racial o étnica</span>
+          </label>
+          <label class="subtipo-fila">
+            <input type="radio" name="tipoDenuncia" value="Discriminación de género">
+            <span>De género</span>
+          </label>
+          <label class="subtipo-fila">
+            <input type="radio" name="tipoDenuncia" value="Discriminación por orientación sexual">
+            <span>Por orientación sexual</span>
+          </label>
+          <label class="subtipo-fila">
+            <input type="radio" name="tipoDenuncia" value="Discriminación por discapacidad">
+            <span>Por discapacidad</span>
+          </label>
+          <label class="subtipo-fila">
+            <input type="radio" name="tipoDenuncia" value="Discriminación religiosa">
+            <span>Religiosa</span>
+          </label>
+          <label class="subtipo-fila">
+            <input type="radio" name="tipoDenuncia" value="Xenofobia">
+            <span>Xenofobia (nacionalidad u origen)</span>
+          </label>
+        </div>
+      </div>
+      <label class="opcion-tipo">
+        <input type="radio" name="tipoDenuncia" value="Otro">
+        <span class="caja">
+          <span class="icono">✏️</span>
+          <span class="etiqueta">Otro</span>
+          <span class="descripcion">Una situación distinta a las anteriores</span>
+        </span>
+      </label>
+    </div>
+    <div class="info-tipo-detalle" id="infoTipoDetalle" style="display:none;"></div>
+  </section>
+
+  <!-- 3. PERSONA DENUNCIADA -->
+  <section class="tarjeta bloqueada" id="tarjetaDenunciado">
+    <div class="encabezado-tarjeta">
+      <span class="num">3</span>
+      <div>
+        <h3>Persona denunciada</h3>
+        <p class="subtexto">Indica a quién corresponde esta denuncia dentro de la unidad educativa.</p>
+      </div>
+    </div>
+    <p class="aviso-bloqueo">Verifica tu correo en el paso 1 para habilitar esta sección.</p>
+    <div class="fila">
+      <div>
+        <label for="nombreDenunciado">Nombre de la persona denunciada</label>
+        <input type="text" id="nombreDenunciado" placeholder="Nombre completo">
+      </div>
+      <div>
+        <label for="posicionDenunciado">Posición en la unidad educativa</label>
+        <select id="posicionDenunciado">
+          <option value="" disabled selected>Selecciona una opción</option>
+          <option value="Estudiante">Estudiante</option>
+          <option value="Docente">Docente</option>
+          <option value="Personal administrativo">Personal administrativo</option>
+          <option value="Personal de apoyo">Personal de apoyo</option>
+          <option value="Padre/madre de familia">Padre/madre de familia</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="fila" id="filaCurso" style="display:none; margin-top:14px;">
+      <div>
+        <label for="cursoDenunciado">Curso del estudiante</label>
+        <select id="cursoDenunciado">
+          <option value="" disabled selected>Selecciona el curso</option>
+          <optgroup label="Primaria">
+            <option value="1ro &quot;A&quot; prim.">1ro "A" prim.</option>
+            <option value="1ro &quot;B&quot; prim.">1ro "B" prim.</option>
+            <option value="1ro &quot;C&quot; prim.">1ro "C" prim.</option>
+            <option value="2do &quot;A&quot; prim.">2do "A" prim.</option>
+            <option value="2do &quot;B&quot; prim.">2do "B" prim.</option>
+            <option value="2do &quot;C&quot; prim.">2do "C" prim.</option>
+            <option value="3ro &quot;A&quot; prim.">3ro "A" prim.</option>
+            <option value="3ro &quot;B&quot; prim.">3ro "B" prim.</option>
+            <option value="3ro &quot;C&quot; prim.">3ro "C" prim.</option>
+            <option value="4to &quot;A&quot; prim.">4to "A" prim.</option>
+            <option value="4to &quot;B&quot; prim.">4to "B" prim.</option>
+            <option value="4to &quot;C&quot; prim.">4to "C" prim.</option>
+            <option value="5to &quot;A&quot; prim.">5to "A" prim.</option>
+            <option value="5to &quot;B&quot; prim.">5to "B" prim.</option>
+            <option value="5to &quot;C&quot; prim.">5to "C" prim.</option>
+            <option value="6to &quot;A&quot; prim.">6to "A" prim.</option>
+            <option value="6to &quot;B&quot; prim.">6to "B" prim.</option>
+            <option value="6to &quot;C&quot; prim.">6to "C" prim.</option>
+          </optgroup>
+          <optgroup label="Secundaria">
+            <option value="1ro &quot;A&quot; sec.">1ro "A" sec.</option>
+            <option value="1ro &quot;B&quot; sec.">1ro "B" sec.</option>
+            <option value="1ro &quot;C&quot; sec.">1ro "C" sec.</option>
+            <option value="2do &quot;A&quot; sec.">2do "A" sec.</option>
+            <option value="2do &quot;B&quot; sec.">2do "B" sec.</option>
+            <option value="2do &quot;C&quot; sec.">2do "C" sec.</option>
+            <option value="3ro &quot;A&quot; sec.">3ro "A" sec.</option>
+            <option value="3ro &quot;B&quot; sec.">3ro "B" sec.</option>
+            <option value="3ro &quot;C&quot; sec.">3ro "C" sec.</option>
+            <option value="4to &quot;A&quot; sec.">4to "A" sec.</option>
+            <option value="4to &quot;B&quot; sec.">4to "B" sec.</option>
+            <option value="4to &quot;C&quot; sec.">4to "C" sec.</option>
+            <option value="5to &quot;A&quot; sec.">5to "A" sec.</option>
+            <option value="5to &quot;B&quot; sec.">5to "B" sec.</option>
+            <option value="5to &quot;C&quot; sec.">5to "C" sec.</option>
+            <option value="6to &quot;A&quot; sec.">6to "A" sec.</option>
+            <option value="6to &quot;B&quot; sec.">6to "B" sec.</option>
+            <option value="6to &quot;C&quot; sec.">6to "C" sec.</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. DESCRIPCIÓN -->
+  <section class="tarjeta bloqueada" id="tarjetaDetalle">
+    <div class="encabezado-tarjeta">
+      <span class="num">4</span>
+      <div>
+        <h3>Descripción de la denuncia</h3>
+        <p class="subtexto">Cuéntanos qué ocurrió, con la mayor cantidad de detalles posible (fecha, lugar, testigos).</p>
+      </div>
+    </div>
+    <p class="aviso-bloqueo">Verifica tu correo en el paso 1 para habilitar esta sección.</p>
+    <label for="detalle">Detalle de lo sucedido</label>
+    <textarea id="detalle" placeholder="Describe la situación aquí..."></textarea>
+  </section>
+
+  <!-- 5. EVIDENCIA (imágenes) -->
+  <section class="tarjeta bloqueada" id="tarjetaEvidencia">
+    <div class="encabezado-tarjeta">
+      <span class="num">5</span>
+      <div>
+        <h3>Evidencia (opcional)</h3>
+        <p class="subtexto">Puedes adjuntar hasta <strong>3 imágenes</strong> (20 MB c/u) y hasta <strong>2 videos</strong> (10 MB c/u).</p>
+      </div>
+    </div>
+    <p class="aviso-bloqueo">Verifica tu correo en el paso 1 para habilitar esta sección.</p>
+    <div class="zona-evidencia">
+      <p><strong>Imágenes:</strong> JPG, PNG, WEBP o GIF · máx. 3 · hasta 20 MB c/u (se comprimen solas).<br>
+         <strong>Videos:</strong> MP4, WEBM o MOV · máx. 2 · hasta 10 MB c/u (videos cortos).</p>
+      <input type="file" id="archivos" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple>
+      <div id="vista-previa"></div>
+      <p class="contador-evidencia" id="contadorEvidencia">Nada adjuntado todavía (máx. 3 imágenes y 2 videos).</p>
+    </div>
+  </section>
+
+  <!-- ENVÍO -->
+  <div class="aviso-emergencia">
+    <span class="icono-emergencia">⚠️</span>
+    <span><strong>¿Es una emergencia o corres peligro ahora mismo?</strong> No esperes a que revisen tu denuncia — acude directamente con un adulto de confianza.</span>
+  </div>
+  <p class="aviso-privacidad">Tu identidad y la información proporcionada serán tratadas de forma confidencial por el equipo de orientación de la unidad educativa.</p>
+  <div style="display:flex; justify-content:center; margin-bottom:16px;">
+    <div class="g-recaptcha" data-sitekey="6LfQ6bktAAAAAF9-DJ3dcJBXfd1mCq9SGRR968sp"></div>
+  </div>
+  <div class="caja-codigo" id="cajaCodigo">
+    <p class="ok-titulo">✔ ¡Tu denuncia fue enviada!</p>
+    <p class="ok-sub">Este es tu código anónimo. Con él podrás ver cómo avanza tu caso.</p>
+    <div class="codigo-grande" id="codigoGrande">DEN-XXXXXXXX</div>
+    <div class="acciones-codigo">
+      <button type="button" class="btn-celeste" id="btnCopiarCodigo">📋 Copiar código</button>
+      <a href="consulta.html" class="btn-rojo" style="padding:12px 20px; border-radius:var(--radio-md); font-weight:600; font-size:.88rem;">🔍 Consultar mi denuncia</a>
+    </div>
+    <p class="advertencia">⚠️ Guárdalo ahora: anótalo o toma una captura. No se puede recuperar si lo pierdes.</p>
+  </div>
+  <div class="barra-envio">
+    <span class="estado-envio" id="estadoEnvio"></span>
+    <a href="consulta.html" class="btn-celeste" id="btnIrAConsulta" style="display:none; text-decoration:none; text-align:center;">🔍 Consultar el estado de mi denuncia</a>
+    <button type="button" class="btn-fantasma" id="btnCancelar">Cancelar</button>
+    <button type="button" class="btn-rojo" id="btnEnviarDenuncia" disabled>Enviar denuncia</button>
+  </div>
+
+</main>
+
+<section class="seccion-faq">
+  <h2>Preguntas frecuentes</h2>
+
+  <details>
+    <summary>¿Mi denuncia es totalmente anónima?</summary>
+    <p>Sí. No te pedimos tu nombre en ningún momento. Tu correo solo se usa una vez, para enviarte un código de verificación y confirmar que eres una persona real (no un bot) — nunca se guarda junto a la denuncia ni queda ligado a ella en el sistema.</p>
+  </details>
+
+  <details>
+    <summary>¿Por qué me piden un correo si esto es anónimo?</summary>
+    <p>Solo para verificar que quien envía la denuncia es una persona real, y así evitar bots o denuncias automatizadas. El correo se usa un momento para mandarte el código y después no queda guardado en ningún lado ligado a tu denuncia.</p>
+  </details>
+
+  <details>
+    <summary>¿Qué pasa después de enviar mi denuncia?</summary>
+    <p>El equipo de orientación la revisa en un panel privado y protegido con contraseña. Primero queda "En espera"; luego la dirección puede marcarla como "Leída", después "En revisión" y, al terminar, "Concluido". Tú ves ese avance en la consulta, junto a la etiqueta "Recibido por Dirección".</p>
+  </details>
+
+  <details>
+    <summary>¿Cómo sé si ya revisaron mi denuncia?</summary>
+    <p>Con el código anónimo que recibes al enviarla (formato DEN-XXXXXXXX), puedes consultar el estado en cualquier momento desde "Consultar el estado de mi denuncia", sin necesidad de dar ningún otro dato.</p>
+  </details>
+
+  <details>
+    <summary>¿Qué pasa si pierdo mi código?</summary>
+    <p>No hay forma de recuperarlo, precisamente porque no queda ligado a ningún dato tuyo (así se protege tu anonimato). Guárdalo apenas te aparezca: usa el botón "Copiar código", anótalo o toma una captura de pantalla.</p>
+  </details>
+
+  <details>
+    <summary>¿A quién puedo denunciar?</summary>
+    <p>A cualquier persona de la comunidad educativa: otro estudiante, un docente, personal administrativo o de apoyo.</p>
+  </details>
+
+  <details>
+    <summary>¿Puedo enviar más de una denuncia?</summary>
+    <p>Sí, puedes enviar todas las que necesites. Cada una genera su propio código y se revisa por separado.</p>
+  </details>
+
+  <details>
+    <summary>¿Necesito tener pruebas o fotos para denunciar?</summary>
+    <p>No es obligatorio. Puedes adjuntar hasta 3 imágenes (máx. 20 MB cada una) y hasta 2 videos (máx. 10 MB cada uno, MP4, WEBM o MOV) si tienes evidencia, pero no es un requisito para poder enviar tu denuncia.</p>
+  </details>
+
+  <details>
+    <summary>¿Qué pasa si envío una denuncia falsa o de broma?</summary>
+    <p>Este sistema existe para ayudar a estudiantes que atraviesan situaciones reales. Usarlo para bromas le quita tiempo y recursos a quienes de verdad necesitan que los escuchen.</p>
+  </details>
+
+  <details>
+    <summary>¿Quién puede ver mi denuncia?</summary>
+    <p>Solo el equipo de administración autorizado, a través de una cuenta protegida con contraseña. Nadie más tiene acceso a la lista de denuncias.</p>
+  </details>
+</section>
+
+<footer>
+  Unidad Educativa Satélite Norte · Sistema de Protección Estudiantil
+</footer>
+
+<script>
+  /* =========================================================================
+     ⚠️ CONFIGURACIÓN NECESARIA ANTES DE PUBLICAR ESTA PÁGINA ⚠️
+     -------------------------------------------------------------------------
+     1) FIREBASE (base de datos donde se guardan las denuncias de texto):
+        - Crea un proyecto gratis en https://console.firebase.google.com
+        - Activa "Realtime Database". No se necesita Storage en este borrador.
+        - Copia tus credenciales del proyecto y reemplázalas abajo en
+          "firebaseConfig".
+
+     2) EMAILJS (solo para el código de verificación OTP; ya no se envía
+        correo de notificación al admin — las denuncias se revisan
+        directamente en admin.html / Firebase):
+        - Crea una cuenta gratis en https://www.emailjs.com
+        - Conecta tu servicio de Gmail
+        - Crea UNA plantilla de VERIFICACIÓN OTP con las variables
+          {{email}}, {{codigo}} y {{time}}. En "Enviar correo electrónico"
+          usa {{email}} (para que el código llegue al usuario, no al admin).
+        - Reemplaza las constantes EMAILJS_* abajo con tus propios IDs.
+
+     Mientras estos datos no se reemplacen, la página funciona igual
+     (formulario, validaciones), pero mostrará un aviso de que falta
+     configurar el envío real. La evidencia acepta imágenes (máx. 3) y videos (máx. 2, 10 MB c/u)
+     (máx. 3, hasta 1 MB cada una) y se guarda directamente como texto
+     (Base64) dentro de la misma denuncia en Realtime Database — no se
+     usa Firebase Storage ni ningún servicio externo, así que no hace
+     falta el plan Blaze ni tarjeta de crédito.
+     ========================================================================= */
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyD-CYI-zIkzv29rxmX31kTDOTveYk_Rx9g",
+    authDomain: "denuncias-satelite-norte.firebaseapp.com",
+    databaseURL: "https://denuncias-satelite-norte-default-rtdb.firebaseio.com",
+    projectId: "denuncias-satelite-norte",
+    storageBucket: "denuncias-satelite-norte.firebasestorage.app",
+    messagingSenderId: "108524743451",
+    appId: "1:108524743451:web:6910a69bcf94fea29681be"
+  };
+
+  const EMAILJS_PUBLIC_KEY = "5L9Bm5h2mFZOMs1Zy";
+  const EMAILJS_SERVICE_ID = "Servicios_denunicas";
+  const EMAILJS_TEMPLATE_VERIFICACION = "template_verificacion";
+
+  let firebaseListo = false;
+  try {
+    firebase.initializeApp(firebaseConfig);
+    firebaseListo = true;
+  } catch (e) {
+    console.error("No se pudo inicializar Firebase:", e);
+  }
+
+  let emailjsListo = false;
+  try {
+    emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+    emailjsListo = true;
+  } catch (e) {
+    console.error("No se pudo inicializar EmailJS:", e);
+  }
+
+  // ---- Verificación de correo ----
+  let codigoGenerado = null;
+  let correoVerificado = false;
+  let codigoExpiraEn = 0;      // marca de tiempo (ms) en que vence el código
+  let intentosCodigo = 0;      // intentos fallidos con el código actual
+  const MAX_INTENTOS_CODIGO = 5;
+
+  const inputCorreo = document.getElementById('correo');
+  const btnEnviarCodigo = document.getElementById('btnEnviarCodigo');
+  const bloqueVerificacion = document.getElementById('bloqueVerificacion');
+  const estadoCodigo = document.getElementById('estadoCodigo');
+  const estadoCorreo = document.getElementById('estadoCorreo');
+  const inputCodigo = document.getElementById('codigo');
+  const btnConfirmarCodigo = document.getElementById('btnConfirmarCodigo');
+  const btnReenviar = document.getElementById('btnReenviar');
+  const insigniaVerificado = document.getElementById('insigniaVerificado');
+  const btnEnviarDenuncia = document.getElementById('btnEnviarDenuncia');
+
+  const descripcionesTipo = {
+    'Abuso': 'Uso de una posición de poder (física, de autoridad o de confianza) para causar daño físico, psicológico o forzar a alguien a hacer algo en contra de su voluntad.',
+    'Acoso': 'Conductas repetidas e indeseadas —burlas, amenazas, intimidación física o verbal— dirigidas a una persona de forma sostenida en el tiempo.',
+    'Extorsión': 'Exigir dinero, objetos o favores a otra persona bajo amenaza, presión o intimidación.',
+    'Difamación': 'Difundir rumores, mentiras o información falsa sobre una persona con el fin de dañar su reputación o imagen ante los demás.',
+    'Ciberbullying': 'Acoso, burlas, amenazas o exposición de una persona a través de redes sociales, chats grupales o cualquier medio digital.',
+    'Discriminación racial o étnica': 'Trato desigual, burlas o exclusión hacia una persona por su raza, etnia, color de piel o rasgos físicos asociados a su origen.',
+    'Discriminación de género': 'Trato desigual hacia una persona por ser hombre, mujer, o por su identidad de género, incluyendo comentarios o exclusión basados en estereotipos de género.',
+    'Discriminación por orientación sexual': 'Trato desigual, burlas o exclusión hacia una persona por su orientación sexual (por ejemplo, homofobia o comentarios despectivos relacionados).',
+    'Discriminación por discapacidad': 'Trato desigual, burlas o exclusión hacia una persona por tener una condición física, sensorial o cognitiva distinta.',
+    'Discriminación religiosa': 'Trato desigual, burlas o exclusión hacia una persona por sus creencias religiosas o por practicar (o no practicar) una religión.',
+    'Xenofobia': 'Trato desigual, burlas o exclusión hacia una persona por su nacionalidad, lugar de origen, acento o por ser considerada "extranjera".',
+    'Otro': 'Usa esta opción si la situación que quieres denunciar no encaja claramente en ninguna de las categorías anteriores.'
+  };
+
+  const infoTipoDetalle = document.getElementById('infoTipoDetalle');
+  document.querySelectorAll('input[name="tipoDenuncia"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const texto = descripcionesTipo[radio.value];
+      if(texto){
+        infoTipoDetalle.innerHTML = '<strong>' + radio.value + ':</strong> ' + texto;
+        infoTipoDetalle.style.display = 'block';
+      }
+    });
+  });
+
+  // ---- Categoría "Discriminación": se despliega en subtipos minimalistas al tocarla ----
+  const categoriaDiscriminacion = document.getElementById('categoriaDiscriminacion');
+  const cabeceraDiscriminacion = document.getElementById('cabeceraDiscriminacion');
+  const subtiposDiscriminacion = document.getElementById('subtiposDiscriminacion');
+  const descDiscriminacion = document.getElementById('descDiscriminacion');
+  const descOriginalDiscriminacion = descDiscriminacion.textContent;
+
+  function alternarDesglose(){
+    const abrir = !subtiposDiscriminacion.classList.contains('abierta');
+    subtiposDiscriminacion.classList.toggle('abierta', abrir);
+    categoriaDiscriminacion.classList.toggle('abierta', abrir);
+  }
+  cabeceraDiscriminacion.addEventListener('click', alternarDesglose);
+  cabeceraDiscriminacion.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); alternarDesglose(); }
+  });
+
+  subtiposDiscriminacion.querySelectorAll('input[name="tipoDenuncia"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      categoriaDiscriminacion.classList.add('tiene-seleccion');
+      const etiquetaCorta = radio.parentElement.querySelector('span:last-child').textContent;
+      descDiscriminacion.textContent = etiquetaCorta;
+    });
+  });
+
+  // Si se elige un tipo fuera de "Discriminación", se quita el resaltado de esa categoría
+  document.querySelectorAll('input[name="tipoDenuncia"]').forEach(radio => {
+    if(!subtiposDiscriminacion.contains(radio)){
+      radio.addEventListener('change', () => {
+        categoriaDiscriminacion.classList.remove('tiene-seleccion');
+        descDiscriminacion.textContent = descOriginalDiscriminacion;
+      });
+    }
+  });
+
+  const posicionDenunciadoSelect = document.getElementById('posicionDenunciado');
+  const filaCurso = document.getElementById('filaCurso');
+  posicionDenunciadoSelect.addEventListener('change', () => {
+    filaCurso.style.display = posicionDenunciadoSelect.value === 'Estudiante' ? 'flex' : 'none';
+    if(posicionDenunciadoSelect.value !== 'Estudiante'){
+      document.getElementById('cursoDenunciado').value = '';
+    }
+  });
+
+  const tarjetasBloqueables = [
+    document.getElementById('tarjetaTipo'),
+    document.getElementById('tarjetaDenunciado'),
+    document.getElementById('tarjetaDetalle'),
+    document.getElementById('tarjetaEvidencia')
+  ];
+  const pasosIndicador = [
+    document.getElementById('pasoInd1'),
+    document.getElementById('pasoInd2'),
+    document.getElementById('pasoInd3'),
+    document.getElementById('pasoInd4'),
+    document.getElementById('pasoInd5')
+  ];
+
+  function esCorreoValido(correo){
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo);
+  }
+
+  function generarCodigo(){
+    const n = crypto.getRandomValues(new Uint32Array(1))[0];
+    return String(100000 + (n % 900000));
+  }
+
+  async function enviarCodigo(){
+    const correo = inputCorreo.value.trim().toLowerCase();
+    if(!/^[^\s@]+@gmail\.com$/.test(correo)){
+      estadoCorreo.textContent = 'Usa una cuenta Gmail válida (ejemplo@gmail.com).';
+      estadoCorreo.className = 'estado error';
+      return;
+    }
+
+    codigoGenerado = generarCodigo();
+    const ahora = new Date();
+    const expiracion = new Date(ahora.getTime() + 10 * 60 * 1000);
+    codigoExpiraEn = expiracion.getTime();
+    intentosCodigo = 0;
+    const horaExpiracion = expiracion.toLocaleTimeString('es-BO', {hour:'2-digit', minute:'2-digit'});
+    bloqueVerificacion.classList.add('activo');
+    estadoCorreo.textContent = '';
+    estadoCodigo.textContent = 'Enviando código a ' + correo + '...';
+    estadoCodigo.className = 'estado pendiente';
+    btnEnviarCodigo.disabled = true;
+    correoVerificado = false;
+
+    try {
+      if(!emailjsListo) throw new Error('EmailJS no está inicializado.');
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_VERIFICACION, {
+        email: correo,
+        passcode: codigoGenerado,
+        time: horaExpiracion,
+        // Alias compatibles si la plantilla anterior los tenía.
+        to_email: correo,
+        codigo: codigoGenerado
+      });
+      estadoCodigo.textContent = 'Código enviado a ' + correo + '. Revisa tu bandeja de entrada (y spam).';
+      estadoCodigo.className = 'estado pendiente';
+    } catch (e) {
+      console.error('EmailJS error al enviar OTP:', e);
+      codigoGenerado = null;
+      const detalle = e && e.text ? e.text : (e && e.message ? e.message : String(e));
+      estadoCodigo.textContent = 'No se pudo enviar el correo: ' + detalle;
+      estadoCodigo.className = 'estado error';
+    } finally {
+      btnEnviarCodigo.disabled = false;
+    }
+  }
+
+  btnEnviarCodigo.addEventListener('click', enviarCodigo);
+  btnReenviar.addEventListener('click', enviarCodigo);
+
+  btnConfirmarCodigo.addEventListener('click', () => {
+    const ingresado = inputCodigo.value.trim();
+    if(!codigoGenerado){
+      estadoCodigo.textContent = 'Solicita un nuevo código antes de continuar.';
+      estadoCodigo.className = 'estado error';
+      return;
+    }
+    if(Date.now() > codigoExpiraEn){
+      codigoGenerado = null;
+      estadoCodigo.textContent = 'El código venció (10 minutos). Solicita uno nuevo.';
+      estadoCodigo.className = 'estado error';
+      return;
+    }
+    if(ingresado === codigoGenerado){
+      correoVerificado = true;
+      estadoCodigo.textContent = '✔ Correo verificado correctamente.';
+      estadoCodigo.className = 'estado ok';
+      inputCorreo.disabled = true;
+      btnEnviarCodigo.disabled = true;
+      btnReenviar.disabled = true;
+      insigniaVerificado.classList.add('mostrar');
+      tarjetasBloqueables.forEach(t => t.classList.remove('bloqueada'));
+      btnEnviarDenuncia.disabled = false;
+      pasosIndicador[0].classList.remove('activo');
+      pasosIndicador[0].classList.add('completo');
+      pasosIndicador[1].classList.add('activo');
+    } else {
+      intentosCodigo++;
+      if(intentosCodigo >= MAX_INTENTOS_CODIGO){
+        codigoGenerado = null;
+        estadoCodigo.textContent = 'Demasiados intentos fallidos. Solicita un código nuevo.';
+      } else {
+        estadoCodigo.textContent = 'Código incorrecto. Te quedan ' + (MAX_INTENTOS_CODIGO - intentosCodigo) + ' intentos.';
+      }
+      estadoCodigo.className = 'estado error';
+    }
+  });
+
+  // ---- Selección acumulativa de evidencia: imágenes (se comprimen) y videos (se suben tal cual) ----
+  const inputArchivos = document.getElementById('archivos');
+  const vistaPrevia = document.getElementById('vista-previa');
+  const contadorEvidencia = document.getElementById('contadorEvidencia');
+  const TAMANO_MAX_IMAGEN = 1024 * 1024; // 1 MB — objetivo final tras comprimir
+  const TAMANO_MAX_ORIGINAL = 20 * 1024 * 1024; // 20 MB — límite de la imagen original antes de comprimir
+  const MAX_IMAGENES = 3;
+  const MAX_VIDEOS = 2;
+  const TAMANO_MAX_VIDEO = 10 * 1024 * 1024; // 10 MB por video (Base64 pesa ~33% más; debe coincidir con las reglas de Firebase)
+
+  let archivosSeleccionados = [];   // imágenes
+  let videosSeleccionados = [];     // videos
+
+  function tipoVideo(archivo){
+    if(/^video\/(mp4|webm|quicktime)$/.test(archivo.type)) return archivo.type;
+    const ext = (archivo.name.split('.').pop() || '').toLowerCase();
+    return ({mp4:'video/mp4', webm:'video/webm', mov:'video/quicktime'})[ext] || '';
+  }
+
+  function actualizarContador(){
+    if(!archivosSeleccionados.length && !videosSeleccionados.length){
+      contadorEvidencia.textContent = 'Nada adjuntado todavía (máx. ' + MAX_IMAGENES + ' imágenes y ' + MAX_VIDEOS + ' videos).';
+    } else {
+      contadorEvidencia.textContent = archivosSeleccionados.length + ' de ' + MAX_IMAGENES + ' imágenes · ' +
+        videosSeleccionados.length + ' de ' + MAX_VIDEOS + ' videos adjuntados.';
+    }
+  }
+
+  function crearMiniatura(archivo, esVideo, alQuitar){
+    const miniatura = document.createElement('div');
+    miniatura.className = 'miniatura';
+    const url = URL.createObjectURL(archivo);
+    let elemento;
+    if(esVideo){
+      elemento = document.createElement('video');
+      elemento.src = url; elemento.muted = true; elemento.preload = 'metadata'; elemento.playsInline = true;
+      const marca = document.createElement('span'); marca.className = 'marca-video'; marca.textContent = '▶ VIDEO';
+      miniatura.appendChild(marca);
+    } else {
+      elemento = document.createElement('img'); elemento.src = url;
+    }
+    const nombre = document.createElement('div'); nombre.className = 'nombre'; nombre.textContent = archivo.name;
+    const quitar = document.createElement('button');
+    quitar.className = 'quitar'; quitar.type = 'button'; quitar.textContent = '✕'; quitar.title = 'Quitar';
+    quitar.addEventListener('click', alQuitar);
+    miniatura.prepend(elemento);
+    miniatura.appendChild(nombre);
+    miniatura.appendChild(quitar);
+    return miniatura;
+  }
+
+  function renderizarPrevias(){
+    vistaPrevia.innerHTML = '';
+    archivosSeleccionados.forEach((archivo, indice) => {
+      vistaPrevia.appendChild(crearMiniatura(archivo, false, () => { archivosSeleccionados.splice(indice, 1); renderizarPrevias(); }));
+    });
+    videosSeleccionados.forEach((archivo, indice) => {
+      vistaPrevia.appendChild(crearMiniatura(archivo, true, () => { videosSeleccionados.splice(indice, 1); renderizarPrevias(); }));
+    });
+    actualizarContador();
+  }
+
+  inputArchivos.addEventListener('change', () => {
+    const nuevos = [...inputArchivos.files];
+    let avisoRechazo = '';
+    nuevos.forEach(archivo => {
+      const esImagen = /^image\/(jpeg|png|webp|gif)$/.test(archivo.type);
+      const tVideo = tipoVideo(archivo);
+      if(esImagen){
+        if(archivosSeleccionados.length >= MAX_IMAGENES){ avisoRechazo = 'Máximo ' + MAX_IMAGENES + ' imágenes por denuncia.'; return; }
+        if(archivo.size > TAMANO_MAX_ORIGINAL){ avisoRechazo = '"' + archivo.name + '" es demasiado pesada (máx. 20 MB).'; return; }
+        const yaExiste = archivosSeleccionados.some(a => a.name === archivo.name && a.size === archivo.size);
+        if(!yaExiste) archivosSeleccionados.push(archivo);
+      } else if(tVideo){
+        if(videosSeleccionados.length >= MAX_VIDEOS){ avisoRechazo = 'Máximo ' + MAX_VIDEOS + ' videos por denuncia.'; return; }
+        if(archivo.size > TAMANO_MAX_VIDEO){
+          avisoRechazo = 'El video "' + archivo.name + '" pesa ' + (archivo.size/1048576).toFixed(1) + ' MB. El máximo es 10 MB: graba un video más corto o en menor calidad.';
+          return;
+        }
+        const yaExiste = videosSeleccionados.some(a => a.name === archivo.name && a.size === archivo.size);
+        if(!yaExiste) videosSeleccionados.push(archivo);
+      } else {
+        avisoRechazo = 'Formato no permitido. Imágenes: JPG, PNG, WEBP o GIF. Videos: MP4, WEBM o MOV.';
+      }
+    });
+    inputArchivos.value = '';
+    renderizarPrevias();
+    if(avisoRechazo){
+      contadorEvidencia.textContent = avisoRechazo;
+      contadorEvidencia.style.color = 'var(--rojo)';
+    } else {
+      contadorEvidencia.style.color = 'var(--gris)';
+    }
+  });
+
+  // ---- Envío final: comprime evidencia a Base64, guarda en Firebase y notifica por correo ----
+  const estadoEnvio = document.getElementById('estadoEnvio');
+
+  // Intenta con createImageBitmap primero (más robusto en Android); si el navegador
+  // no lo soporta o falla, cae de vuelta al método con <img> + createObjectURL.
+  async function cargarImagen(archivo){
+    if(window.createImageBitmap){
+      try {
+        return await createImageBitmap(archivo);
+      } catch (e) {
+        console.warn('createImageBitmap falló, probando método alternativo:', e);
+      }
+    }
+    return new Promise((resolve, reject) => {
+      const urlObjeto = URL.createObjectURL(archivo);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(urlObjeto);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(urlObjeto);
+        reject(new Error('No se pudo leer la imagen "' + archivo.name + '". Prueba con otra foto, o tómala de nuevo con la cámara.'));
+      };
+      img.src = urlObjeto;
+    });
+  }
+
+  // Reduce dimensiones y calidad JPEG hasta que quepa bajo TAMANO_MAX_IMAGEN
+  async function comprimirImagen(archivo){
+    const img = await cargarImagen(archivo); // puede ser ImageBitmap o HTMLImageElement, ambos sirven para drawImage
+    let anchoMax = 1600; // lado más largo, en píxeles
+    let calidad = 0.82;
+    let dataUrl = '';
+
+    for(let intento = 0; intento < 8; intento++){
+      const escala = Math.min(1, anchoMax / Math.max(img.width, img.height));
+      const ancho = Math.round(img.width * escala);
+      const alto = Math.round(img.height * escala);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = ancho;
+      canvas.height = alto;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, ancho, alto);
+      dataUrl = canvas.toDataURL('image/jpeg', calidad);
+
+      // Tamaño aproximado en bytes a partir del largo de la cadena Base64
+      const bytesAprox = Math.round((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75);
+      if(bytesAprox <= TAMANO_MAX_IMAGEN) break;
+
+      // Si sigue pesando de más, se reduce calidad y/o dimensiones para el siguiente intento
+      if(calidad > 0.45){ calidad -= 0.12; }
+      else { anchoMax = Math.round(anchoMax * 0.75); }
+    }
+    if(img.close) img.close(); // libera memoria si era un ImageBitmap
+    return dataUrl;
+  }
+
+  async function subirEvidencia(){
+    if(!archivosSeleccionados.length) return [];
+    const resultado = [];
+    for(let i = 0; i < archivosSeleccionados.length; i++){
+      const archivo = archivosSeleccionados[i];
+      estadoEnvio.textContent = 'Comprimiendo imagen ' + (i + 1) + ' de ' + archivosSeleccionados.length + '...';
+      const dataUrl = await comprimirImagen(archivo);
+      resultado.push({ nombre: archivo.name, tipo: 'image/jpeg', url: dataUrl });
+    }
+    return resultado;
+  }
+
+  function leerVideoBase64(archivo){
+    return new Promise((resolve, reject) => {
+      const lector = new FileReader();
+      lector.onload = () => {
+        // normaliza el tipo MIME (algunos móviles no lo informan) y deja solo la parte Base64
+        const base64 = String(lector.result).split(',')[1] || '';
+        resolve('data:' + tipoVideo(archivo) + ';base64,' + base64);
+      };
+      lector.onerror = () => reject(new Error('No se pudo leer el video "' + archivo.name + '".'));
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  btnEnviarDenuncia.addEventListener('click', async () => {
+    if(!correoVerificado){
+      alert('Primero debes verificar tu correo electrónico.');
+      return;
+    }
+    if(typeof grecaptcha === 'undefined' || !grecaptcha.getResponse().length){
+      alert('Marca la casilla "No soy un robot" antes de enviar.');
+      return;
+    }
+    const tipo = document.querySelector('input[name="tipoDenuncia"]:checked');
+    if(!tipo){
+      alert('Selecciona el tipo de denuncia.');
+      return;
+    }
+    const nombreDenunciado = document.getElementById('nombreDenunciado').value.trim();
+    const posicionDenunciado = document.getElementById('posicionDenunciado').value;
+    if(!nombreDenunciado || !posicionDenunciado){
+      alert('Completa el nombre y la posición de la persona denunciada.');
+      return;
+    }
+    const cursoDenunciado = document.getElementById('cursoDenunciado').value;
+    if(posicionDenunciado === 'Estudiante' && !cursoDenunciado){
+      alert('Selecciona el curso del estudiante denunciado.');
+      return;
+    }
+    const detalle = document.getElementById('detalle').value.trim();
+    if(!detalle){
+      alert('Describe brevemente lo sucedido.');
+      return;
+    }
+    if(!firebaseListo){
+      estadoEnvio.textContent = 'No se pudo conectar con Firebase.';
+      estadoEnvio.style.color = 'var(--rojo)';
+      return;
+    }
+
+    btnEnviarDenuncia.disabled = true;
+    estadoEnvio.textContent = 'Guardando denuncia...';
+    estadoEnvio.style.color = 'var(--gris)';
+
+    try {
+      const db = firebase.database();
+      function generarCodigoAnonimo(){
+        const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin caracteres ambiguos (0,O,1,I)
+        let sufijo = '';
+        const azar = crypto.getRandomValues(new Uint32Array(8));
+    for(let i = 0; i < 8; i++){ sufijo += caracteres[azar[i] % caracteres.length]; }
+        return 'DEN-' + sufijo;
+      }
+
+      const codigoAnonimo = generarCodigoAnonimo();
+      const idDenuncia = codigoAnonimo; // el código ES el ID, así se puede consultar después
+      const nuevaRef = db.ref('denuncias/' + idDenuncia);
+
+      const urlsEvidencia = await subirEvidencia();
+
+      // Los videos se guardan aparte (nodo videos_denuncia/CODIGO/n) para que el panel no los descargue todos a la vez.
+      // Se suben ANTES que la denuncia: si falla un video, no queda una denuncia incompleta.
+      const videosMeta = [];
+      for(let i = 0; i < videosSeleccionados.length; i++){
+        const v = videosSeleccionados[i];
+        estadoEnvio.textContent = 'Subiendo video ' + (i + 1) + ' de ' + videosSeleccionados.length + '... no cierres la página.';
+        const dataUrlVideo = await leerVideoBase64(v);
+        await db.ref('videos_denuncia/' + idDenuncia + '/' + i).set(dataUrlVideo);
+        videosMeta.push({ nombre: v.name, tipo: tipoVideo(v), tam: v.size });
+      }
+
+      estadoEnvio.textContent = 'Guardando denuncia...';
+
+      // El correo NO se guarda en la denuncia para preservar el anonimato.
+      await nuevaRef.set({
+        codigo_anonimo: codigoAnonimo,
+        tipo: tipo.value,
+        denunciado_nombre: nombreDenunciado,
+        denunciado_posicion: posicionDenunciado,
+        denunciado_curso: posicionDenunciado === 'Estudiante' ? cursoDenunciado : '',
+        detalle: detalle,
+        evidencia: urlsEvidencia,
+        videos_meta: videosMeta,
+        fecha: new Date().toISOString(),
+        estado: 'Nueva',
+        leida: false
+      });
+
+      estadoEnvio.textContent = '';
+      document.getElementById('codigoGrande').textContent = codigoAnonimo;
+      const cajaCodigo = document.getElementById('cajaCodigo');
+      cajaCodigo.classList.add('mostrar');
+      cajaCodigo.scrollIntoView({behavior:'smooth', block:'center'});
+      pasosIndicador.forEach(p => { p.classList.remove('activo'); p.classList.add('completo'); });
+      btnEnviarDenuncia.style.display = 'none';
+      document.getElementById('btnCancelar').style.display = 'none';
+      if(typeof grecaptcha !== 'undefined') grecaptcha.reset();
+    } catch (error) {
+      console.error('Error guardando denuncia:', error);
+      const detalleError = error && error.message ? error.message : String(error);
+      estadoEnvio.textContent = 'No se pudo guardar la denuncia: ' + detalleError;
+      estadoEnvio.style.color = 'var(--rojo)';
+      btnEnviarDenuncia.disabled = false;
+    }
+  });
+
+  document.getElementById('btnCopiarCodigo').addEventListener('click', async (ev) => {
+    const texto = document.getElementById('codigoGrande').textContent;
+    const btn = ev.currentTarget;
+    try {
+      await navigator.clipboard.writeText(texto);
+      btn.textContent = '✔ ¡Copiado!';
+    } catch (e) {
+      const rango = document.createRange();
+      rango.selectNodeContents(document.getElementById('codigoGrande'));
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rango);
+      btn.textContent = 'Selecciona y copia manualmente';
+    }
+    setTimeout(() => { btn.textContent = '📋 Copiar código'; }, 2500);
+  });
+
+  document.getElementById('btnCancelar').addEventListener('click', () => {
+    if(confirm('¿Deseas cancelar y borrar lo escrito hasta ahora?')){
+      location.reload();
+    }
+  });
+</script>
+
+</body>
+</html>
